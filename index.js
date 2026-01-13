@@ -116,12 +116,16 @@ const modalClose = modalContent.append("button").attr("class", "modal-close").te
 const modalBody = modalContent.append("div").attr("class", "modal-body");
 
 modalClose.on("click", () => {
-    modal.transition().duration(200).style("opacity", 0).style("pointer-events", "none");
+    modal.transition().duration(200)
+        .style("opacity", 0)
+        .on("end", () => modal.style("pointer-events", "none"));
 });
 
 modal.on("click", (e) => {
     if (e.target.className === "modal-overlay") {
-        modal.transition().duration(200).style("opacity", 0).style("pointer-events", "none");
+        modal.transition().duration(200)
+            .style("opacity", 0)
+            .on("end", () => modal.style("pointer-events", "none"));
     }
 });
 
@@ -134,7 +138,9 @@ function showModal(d) {
             <p class="modal-location">📍 ${d.data.location}</p>
         </div>
     `);
-    modal.transition().duration(200).style("opacity", 1).style("pointer-events", "all");
+    modal.style("pointer-events", "all")
+        .transition().duration(200)
+        .style("opacity", 1);
 }
 
 // State
@@ -663,6 +669,7 @@ function initTree() {
 
 // --- 4. Fan Logic ---
 // --- 4. Fan Logic ---
+// --- 4. Fan Logic ---
 function initFan() {
     svg.selectAll("*").remove();
     svg.on(".drag", null);
@@ -671,90 +678,198 @@ function initFan() {
     // 3. Set Background for Fan View (Black)
     svg.style("background", "black");
 
-    // Container Group
-    const g = svg.append("g");
-
-    // Reduce radius slightly to fit label
     const radius = Math.min(width, height) * 0.45;
 
-    const root = d3.hierarchy(familyData)
-        .sort((a, b) => b.height - a.height || a.data.name.localeCompare(b.data.name));
+    // --- 1. Define Extra Data (Virtual Nodes for Fan View) ---
+    // These are not in the main tree but needed for the "Me-centric" view
+    const extraNodes = [
+        { id: "m1", name: "Mother", age: 48, gender: "Female", location: "Mumbai, India", photo: "https://ui-avatars.com/api/?name=Mother&background=FF69B4&color=fff", relation: "Mother" },
+        { id: "mg1", name: "Grandmother", age: 75, gender: "Female", location: "Mumbai, India", photo: "https://ui-avatars.com/api/?name=Grand+Mother&background=random", relation: "Maternal Grandmother" },
+        { id: "bil1", name: "Brother-in-Law", age: 24, gender: "Male", location: "Dubai, UAE", photo: "https://ui-avatars.com/api/?name=Bro+In+Law&background=random", relation: "Brother-in-Law" }
+    ];
 
-    // Color Setup: Assign colors based on Gender
-    root.descendants().forEach(d => {
-        if (d.data.isMe) {
-            d.borderColor = "#FFD700"; // Gold for "Me"
-        } else if (d.data.gender === "Male") {
-            d.borderColor = "#0D8ABC"; // Blue
-        } else if (d.data.gender === "Female") {
-            d.borderColor = "#FF69B4"; // Pink
-        } else {
-            d.borderColor = "#ccc"; // Default
+    // --- 2. Build Graph (Adjacency List) ---
+    const allNodesMap = new Map();
+    const adj = new Map();
+
+    // Helper to add node
+    const addNode = (n) => {
+        if (!allNodesMap.has(n.id)) {
+            allNodesMap.set(n.id, n);
+            adj.set(n.id, []);
+        }
+    };
+
+    // Add Main Tree Nodes
+    const mainRoot = d3.hierarchy(familyData);
+    mainRoot.descendants().forEach(d => {
+        // Flatten data structure (we just need the data object)
+        addNode(d.data);
+    });
+
+    // Add Extra Nodes
+    extraNodes.forEach(addNode);
+
+    // Helper to add Edge (Undirected)
+    const addEdge = (id1, id2) => {
+        if (allNodesMap.has(id1) && allNodesMap.has(id2)) {
+            adj.get(id1).push(id2);
+            adj.get(id2).push(id1);
+        }
+    };
+
+    // A. Add Tree Edges (Parent-Child)
+    mainRoot.links().forEach(link => {
+        addEdge(link.source.data.id, link.target.data.id);
+    });
+
+    // B. Add Sibling Edges (Virtual)
+    // Connect all children of the same parent
+    mainRoot.descendants().forEach(d => {
+        if (d.children) {
+            for (let i = 0; i < d.children.length; i++) {
+                for (let j = i + 1; j < d.children.length; j++) {
+                    addEdge(d.children[i].data.id, d.children[j].data.id);
+                }
+            }
         }
     });
 
-    // MANUAL LAYOUT: Equal Sibling Angles + Full Radius
-    // 1. Calculate Y (Radial) steps
-    // Divide radius by (maxDepth + 1). Root is at center (0).
-    // Actually standard partition puts root at center.
-    const maxDepth = root.height + 1; // +1 for root level? root depth is 0. height is max depth from root.
-    // If root.height is 3, we have levels 0, 1, 2, 3. Total 4 levels.
-    const layerDepth = radius / (root.height + 1);
+    // C. Add Custom Edges (The "Me" centering logic)
+    // Find "Me"
+    const meNode = mainRoot.descendants().find(d => d.data.name === "Me")?.data;
+    const fatherNode = mainRoot.descendants().find(d => d.data.name === "Father")?.data;
+    const sisterNode = mainRoot.descendants().find(d => d.data.name === "Sister")?.data;
 
-    // 2. Perform Layout (DFS)
-    // Root takes full 360 (0 to 2PI)
-    root.x0 = 0;
-    root.x1 = 2 * Math.PI;
-    root.y0 = 0;
-    root.y1 = layerDepth; // Root circle
+    if (meNode) {
+        // Me <-> Mother
+        addEdge(meNode.id, "m1"); // Mother
+    }
 
-    root.eachBefore(d => {
-        // Compute children angles equaly
+    // Mother <-> Grandmother
+    addEdge("m1", "mg1");
+
+    // Mother <-> Father (Spouses)
+    if (fatherNode) addEdge("m1", fatherNode.id);
+
+    // Sister <-> Brother-in-Law
+    if (sisterNode) addEdge(sisterNode.id, "bil1");
+
+
+    // --- 3. BFS to Build Hierarchy from "Me" ---
+    if (!meNode) {
+        console.error("Me node not found!");
+        return;
+    }
+
+    const newRoot = { ...meNode, children: [] };
+    // Map to track new hierarchy nodes to attach children
+    const hierMap = new Map();
+    hierMap.set(meNode.id, newRoot);
+
+    const visited = new Set([meNode.id]);
+    const queue = [{ id: meNode.id, depth: 0, node: newRoot }];
+
+    // We need to reconstruct a tree for D3 pack/tree/partition
+    // Level 0: Me
+    // Level 1: Neighbors of Me
+    // Level 2: Neighbors of Level 1 (excluding visited)
+
+    while (queue.length > 0) {
+        const { id, depth, node } = queue.shift();
+
+        const neighbors = adj.get(id) || [];
+        neighbors.forEach(nid => {
+            if (!visited.has(nid)) {
+                visited.add(nid);
+                const originalData = allNodesMap.get(nid);
+                const newNode = { ...originalData, children: [], dist: depth + 1 };
+
+                // Attach to parent in new hierarchy
+                node.children.push(newNode);
+
+                queue.push({ id: nid, depth: depth + 1, node: newNode });
+            }
+        });
+    }
+
+    // --- 4. Layout & Rendering ---
+    const fanRoot = d3.hierarchy(newRoot)
+        .sort((a, b) => (a.data.dist - b.data.dist) || a.data.name.localeCompare(b.data.name));
+
+    // Color Scale based on Distance
+    const colorScale = d3.interpolateRainbow; // or custom
+
+    fanRoot.each(d => {
+        // d.depth here corresponds to BFS distance
+        // 0 = Me, 1 = Parents/Sibs, 2 = Grandparents/In-laws
+        if (d.depth === 0) d.color = "#FFD700"; // Gold for Me
+        else if (d.depth === 1) d.color = "#84fab0"; // Light Green
+        else if (d.depth === 2) d.color = "#8fd3f4"; // Light Blue
+        else d.color = "#a18cd1"; // Purple
+    });
+
+    // Custom Partition/Fan Layout
+    const layerDepth = radius / (fanRoot.height + 1);
+
+    fanRoot.x0 = 0;
+    fanRoot.x1 = 2 * Math.PI;
+    fanRoot.y0 = 0;
+    fanRoot.y1 = layerDepth; // Center radius
+
+    // Partition logic manual override for concentric rings
+    fanRoot.eachBefore(d => {
         if (d.children && d.children.length > 0) {
-            const range = d.x1 - d.x0;
+            const range = d.x1 - d.x0; // Full circle for root, segment for others
+            // Distribute children evenly in their sector
             const step = range / d.children.length;
 
             d.children.forEach((child, i) => {
                 child.x0 = d.x0 + i * step;
                 child.x1 = d.x0 + (i + 1) * step;
 
-                child.y0 = d.y1;
-                // If leaf, go to full radius. Else, next layer.
-                if (!child.children || child.children.length === 0) {
-                    child.y1 = radius;
-                } else {
-                    child.y1 = child.y0 + layerDepth;
-                }
+                // Radius: Strictly based on depth
+                child.y0 = (d.depth + 1) * layerDepth + 5;
+                child.y1 = child.y0 + layerDepth - 5;
             });
         }
     });
 
+    // Override Root geometry to be a full circle
+    fanRoot.y0 = 0;
+    fanRoot.y1 = layerDepth - 5;
+
     const arc = d3.arc()
-        .startAngle(d => d.x0) // Start from 0
-        .endAngle(d => d.x1)   // Go to 2*PI
+        .startAngle(d => d.x0)
+        .endAngle(d => d.x1)
         .innerRadius(d => d.y0)
-        .outerRadius(d => d.y1);
+        .outerRadius(d => d.y1)
+        .padAngle(0.02)
+        .cornerRadius(5);
+
+    // --- 3D Scene Setup ---
+    const scene = svg.append("g")
+        .attr("transform", `translate(${width / 2}, ${height / 2})`);
 
     // Define Drop Shadow Filter
     const defs = svg.append("defs");
     const filter = defs.append("filter")
-        .attr("id", "drop-shadow")
+        .attr("id", "block-shadow")
         .attr("height", "150%");
 
     filter.append("feGaussianBlur")
         .attr("in", "SourceAlpha")
-        .attr("stdDeviation", 3)
+        .attr("stdDeviation", 4)
         .attr("result", "blur");
 
     filter.append("feOffset")
         .attr("in", "blur")
-        .attr("dx", 2)
-        .attr("dy", 2)
+        .attr("dx", 3)
+        .attr("dy", 3)
         .attr("result", "offsetBlur");
 
     filter.append("feFlood")
-        .attr("flood-color", "#000")
-        .attr("flood-opacity", 0.5)
+        .attr("flood-color", "rgba(0,0,0,0.6)")
         .attr("result", "color");
 
     filter.append("feComposite")
@@ -767,81 +882,120 @@ function initFan() {
         .append("feMergeNode").attr("in", "shadow");
     filter.select("feMerge").append("feMergeNode").attr("in", "SourceGraphic");
 
-    // Paths
-    const pathGroup = g.selectAll("path")
-        .data(root.descendants())
+    // Draw
+    const pathGroup = scene.selectAll(".fan-segment")
+        .data(fanRoot.descendants())
         .enter().append("g")
         .attr("class", "fan-segment")
-        .style("transition", "transform 0.2s ease-out") // CSS transition for smooth scale
+        .style("cursor", "pointer")
         .on("click", (event, d) => {
             event.stopPropagation();
             showModal(d);
         });
 
     pathGroup.append("path")
+
         .attr("d", arc)
-        .style("fill", "white") // White background
-        .style("stroke", d => d.borderColor || "#ddd") // Colored border
-        .style("stroke-width", d => d.data.isMe ? "4px" : "2px") // Thicker for Me
-        .style("cursor", "pointer")
+        .style("fill", d => d.color)
+        .style("stroke", "#333")
+        .style("stroke-width", "1px")
+        .style("filter", "url(#block-shadow)") // Restore Shadow
         .on("mouseover", function (event, d) {
-            // 3D Pop-out Effect - Scale from Center (Origin)
-            // This ensures consistent "zoom" effect without detachment
-            const segment = d3.select(this.parentNode);
-
-            // Just scale! The group is already at (0,0) of the fan.
-            segment.attr("transform", "scale(1.05)");
-
-            // Apply drop shadow
-            d3.select(this).style("filter", "url(#drop-shadow)");
-
-            // Bring to front
-            segment.raise();
+            d3.select(this).style("transform", "scale(1.02)");
         })
         .on("mouseout", function (event, d) {
-            const segment = d3.select(this.parentNode);
-            segment.attr("transform", null); // Reset transform
-            d3.select(this).style("filter", null); // Remove shadow
+            d3.select(this).style("transform", "scale(1)");
         });
 
     // Labels
     pathGroup.append("text")
-        .attr("transform", function (d) {
-            if (d.depth === 0) return "translate(0,0)"; // Center root horizontally
-            const x = (d.x0 + d.x1) / 2 * 180 / Math.PI;
-            const y = (d.y0 + d.y1) / 2;
-            return `rotate(${x - 90}) translate(${y},0) rotate(${x < 180 ? 0 : 180})`;
+        .attr("transform", d => {
+            const centroid = arc.centroid(d);
+            const midAngle = (d.x0 + d.x1) / 2;
+            const deg = midAngle * 180 / Math.PI;
+
+            // 1. Me Node: Center and Horizontal
+            if (d.depth === 0) return `translate(${centroid}) rotate(0)`;
+
+            // 2. Inner Ring (Depth 1): Tangential (Along the Curve)
+            if (d.depth === 1) {
+                // Flip text on left side for readability
+                const rotate = (deg > 90 && deg < 270) ? deg + 180 : deg;
+                return `translate(${centroid}) rotate(${rotate})`;
+            }
+
+            // 3. Outer Rings (Depth >= 2): Radial (Perpendicular to Center)
+            // This fits better for thin wedges in outer layers
+            const rotate = (deg < 180) ? (deg - 90) : (deg + 90);
+            return `translate(${centroid}) rotate(${rotate})`;
         })
-        .attr("dy", "0.35em")
         .attr("text-anchor", "middle")
-        .text(d => d.data.name)
-        .style("font-size", "12px")
-        .style("fill", "#333")
+        .style("font-size", "10px")
+        .style("fill", "#000")
         .style("pointer-events", "none")
         .each(function (d) {
-            // Relation under name
             const el = d3.select(this);
-            el.append("tspan")
-                .attr("x", 0)
-                .attr("dy", "1.2em")
-                .text(d.data.relation)
-                .style("font-size", "10px")
-                .style("fill", "#666");
+            // Relation (Always at bottom)
+            const relationText = d.data.relation;
+
+            // Name Logic
+            const name = d.data.name;
+            const words = name.split(" ");
+
+            // If Depth 1 (Big Blocks), try to wrap lines
+            if (d.depth === 1 && words.length > 1) {
+                // Stack words
+                words.forEach((word, i) => {
+                    el.append("tspan")
+                        .text(word)
+                        .attr("x", 0)
+                        .attr("dy", i === 0 ? "-0.2em" : "1.1em") // Stack vertically
+                        .style("font-weight", "bold");
+                });
+
+                // Add relation below the last word
+                el.append("tspan")
+                    .text(relationText)
+                    .attr("x", 0)
+                    .attr("dy", "1.2em")
+                    .style("font-size", "8px")
+                    .style("fill", "#444");
+            } else {
+                // Standard Single Line (Depth 0 or Depth >= 2 or Single Word)
+                const isOuter = d.depth >= 2;
+
+                // Name
+                el.append("tspan")
+                    .text(d.depth >= 2 && name.length > 10 ? name.substring(0, 9) + ".." : name)
+                    .attr("x", 0)
+                    .attr("dy", d.depth === 0 ? "0.35em" : "-0.2em")
+                    .style("font-weight", "bold");
+
+                // Relation
+                if (d.depth !== 0) {
+                    el.append("tspan")
+                        .text(isOuter && relationText.length > 10 ? relationText.substring(0, 9) + ".." : relationText)
+                        .attr("x", 0)
+                        .attr("dy", "1.2em")
+                        .style("font-size", "8px")
+                        .style("fill", "#444");
+                }
+            }
         });
 
-    // Zoom for Fan
+    // Zoom Logic
     const zoom = d3.zoom()
         .scaleExtent([0.1, 5])
         .on("zoom", (event) => {
-            g.attr("transform", event.transform);
+            scene.attr("transform", event.transform);
         });
 
-    // Apply zoom to SVG
-    svg.call(zoom);
+    svg.call(zoom)
+        .call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
 
-    // Initial positioning: Center roughly at center
-    const initialTransform = d3.zoomIdentity.translate(width / 2, height / 2).scale(1);
-    svg.call(zoom.transform, initialTransform);
+
+
+
 }
 
 // --- 5. Isometric 3D Logic ---
@@ -887,7 +1041,7 @@ function init3DTree() {
 
     // Standard Tree Layout First
     const treeLayout = d3.tree()
-        .nodeSize([120, 100]) // Compact node size
+        .nodeSize([240, 150]) // Expanded more for dynamic widths
         .separation((a, b) => a.parent == b.parent ? 1.2 : 1.5);
 
     const root = d3.hierarchy(familyData);
@@ -913,6 +1067,15 @@ function init3DTree() {
     // Calculate Iso Coords for all nodes
     root.descendants().forEach(d => {
         [d.isoX, d.isoY] = toIso(d.x, d.y);
+    });
+
+    // Calculate Dynamic Widths
+    const bw = 120; // Base width
+    root.descendants().forEach(d => {
+        // approx 8px per char + padding
+        // If name is short, use bw. If long, expand.
+        const nameLen = d.data.name.length;
+        d.width = Math.max(bw, nameLen * 8 + 60);
     });
 
     // Links
@@ -943,136 +1106,218 @@ function init3DTree() {
         .attr("stroke-width", 2)
         .attr("stroke-linecap", "round");
 
-    // Nodes (3D Blocks)
+    // --- Shared Sibling Backgrounds ---
+    // Group nodes by parent to identify siblings
+    const siblingGroups = d3.group(root.descendants(), d => d.parent);
+
+    // Render Order: Links -> Platforms -> Nodes (Content)
+
+    // 1. Links (Existing code moves here or stays before?) 
+    // Links are already drawn before this block in the file (lines 945-962). Keep them there.
+
+    // 2. Platforms (Shared Backgrounds)
+    const platformsLayer = g.append("g").attr("class", "iso-platforms");
+
+    // Helper for Block Geometry (Reused)
+    function getBlockCorners(w, h) {
+        const c1 = toIso(-w / 2, -h / 2);
+        const c2 = toIso(w / 2, -h / 2);
+        const c3 = toIso(w / 2, h / 2);
+        const c4 = toIso(-w / 2, h / 2);
+        return { c1, c2, c3, c4 };
+    }
+
+    const bh = 75; // Depth of the block on the floor
+    const extrusion = 15; // Vertical thickness
+    // Colors
+    const genColors = ["#FEF3C7", "#FFEDD5", "#FCE7F3", "#EDE9FE", "#DBEAFE"];
+    const getGenColor = (d) => genColors[d.depth % genColors.length];
+
+    // Iterate through groups and render platforms
+    siblingGroups.forEach((siblings, parent) => {
+        if (!siblings || siblings.length === 0) return;
+
+        // Calculate Bounding Box of the group in Tree Space (x, y)
+        // Tree X is the width/horizontal axis. Tree Y is constant for siblings.
+        // We include half-width of the outer nodes + some padding.
+        let minX = Infinity;
+        let maxX = -Infinity;
+        const commonY = siblings[0].y;
+        const depth = siblings[0].depth;
+
+        // For coloring, we use the first sibling's data
+        const rep = siblings[0];
+
+        siblings.forEach(node => {
+            const left = node.x - node.width / 2;
+            const right = node.x + node.width / 2;
+            if (left < minX) minX = left;
+            if (right > maxX) maxX = right;
+        });
+
+        // Add padding between siblings/edges?
+        // Reference image shows they are tight on the "platform".
+        // Let's add a small margin to the whole platform.
+        const padding = 10;
+        minX -= padding;
+        maxX += padding;
+
+        const platformWidth = maxX - minX;
+        const centerX = (minX + maxX) / 2;
+
+        // Convert Center(x,y) to Iso(x,y)
+        const [isoCx, isoCy] = toIso(centerX, commonY);
+
+        const platform = platformsLayer.append("g")
+            .attr("transform", `translate(${isoCx}, ${isoCy}) translate(0, ${-extrusion})`);
+
+        // Draw Platform - Same logic as individual block but using platformWidth
+
+        // Side Faces (Darker)
+        // Left Face
+        platform.append("path")
+            .attr("d", () => {
+                const { c3, c4 } = getBlockCorners(platformWidth, bh);
+                return `M ${c4[0]},${c4[1]} L ${c3[0]},${c3[1]} L ${c3[0]},${c3[1] + extrusion} L ${c4[0]},${c4[1] + extrusion} Z`;
+            })
+            .attr("fill", d3.color(getGenColor(rep)).darker(0.6).hex());
+
+        // Right Face
+        platform.append("path")
+            .attr("d", () => {
+                const { c2, c3 } = getBlockCorners(platformWidth, bh);
+                return `M ${c3[0]},${c3[1]} L ${c2[0]},${c2[1]} L ${c2[0]},${c2[1] + extrusion} L ${c3[0]},${c3[1] + extrusion} Z`;
+            })
+            .attr("fill", d3.color(getGenColor(rep)).darker(0.8).hex());
+
+        // Top Face (Lighter)
+        platform.append("path")
+            .attr("d", () => {
+                const { c1, c2, c3, c4 } = getBlockCorners(platformWidth, bh);
+                return `M ${c1[0]},${c1[1]} L ${c2[0]},${c2[1]} L ${c3[0]},${c3[1]} L ${c4[0]},${c4[1]} Z`;
+            })
+            .attr("fill", getGenColor(rep));
+    });
+
+
+    // 3. Nodes (Content Only)
+    // Individual items on top of the platforms
     const nodes = g.selectAll(".iso-node")
         .data(root.descendants())
         .enter().append("g")
         .attr("class", "iso-node")
         .style("cursor", "pointer")
-        .attr("transform", d => `translate(${d.isoX},${d.isoY})`) // z-index sorting by y?
-        // Sort by depth (y) and then x to ensure correct overlap?
-        // In isometric painter's algorithm: draw furthest back first.
-        // lowest (x+y) first?
-        // tree y increases, so root (0) is top. children are bottom.
-        // We render typically top-down in DOM order. 
-        // Root is at top of screen? No, isoY increases. Root is top.
-        // Children (larger y) are lower on screen. They should be ON TOP of parents if overlapping vertical?
-        // Usually lower on screen = closer to camera = paint last.
-        // D3 renders preorder. Parents first.
-        // So parents (background) rendered first, children (foreground) rendered last. Perfect.
+        .attr("transform", d => `translate(${d.isoX},${d.isoY})`) // Position correctly
         .on("click", (event, d) => {
             event.stopPropagation();
             showModal(d);
         });
 
-    // Block Dimensions
-    const bw = 80;
-    const bh = 50; // Top face dimensions
-    const depth = 15; // Extrusion height
-
-    // Colors
-    const colorScale = d3.scaleOrdinal(d3.schemeSet3);
-
-    // Shadow (Bottom/Floor shadow)
-    nodes.append("ellipse")
-        .attr("cx", 0)
-        .attr("cy", depth * 1.5)
-        .attr("rx", bw * 0.6)
-        .attr("ry", bh * 0.6)
-        .attr("fill", "rgba(0,0,0,0.1)");
-
-    // 3D Block Group - Shift UP so (0,0) is "on the floor"
+    // Content Group - Shift UP to sit on top of the platform (-extrusion)
     const block = nodes.append("g")
-        .attr("transform", `translate(0, ${-depth})`);
+        .attr("transform", `translate(0, ${-extrusion})`);
 
-    // Side Faces (Darker)
-    // Left Face
-    // path: Bottom-mid -> Left-mid -> Left-mid-up -> Bottom-mid-up
-    // Let's draw a simple "Right" and "Front" extrusion
-    // Assuming "Diamond" shape for top?
-    // Let's draw "Rounded Rect" in perspective
-
-    // Simplification: Rectangle with rounded corners
-    const w = 80, h = 50;
-
-    // Front Face (Thick edge)
-    block.append("path")
-        .attr("d", `
-            M ${-w / 2}, 0 
-            L ${w / 2}, 0 
-            L ${w / 2}, ${depth} 
-            L ${-w / 2}, ${depth} Z
-        `)
-        .attr("fill", d => d3.color(colorScale(d.depth)).darker(0.7).hex())
-        .attr("transform", `translate(0, ${h / 2})`); // Shift to bottom edge of top face?
-
-    // But that's flat. Isometric block:
-    //      / \
-    //     | T |
-    //     \ /
-    //     | | 
-    //     \_/
-
-    // Let's simulate the visual from image: 
-    // It looks like a "slab" with rounded corners.
-
-    // Extrusion Layer (Darker)
-    block.append("rect")
-        .attr("x", -w / 2)
-        .attr("y", -h / 2 + depth)
-        .attr("width", w)
-        .attr("height", h)
-        .attr("rx", 10)
-        .attr("fill", d => d3.color(colorScale(d.depth)).darker(0.5).hex());
-
-    // Top Face (Lighter)
-    block.append("rect")
-        .attr("x", -w / 2)
-        .attr("y", -h / 2)
-        .attr("width", w)
-        .attr("height", h)
-        .attr("rx", 10)
-        //.attr("stroke", "white")
-        //.attr("stroke-width", 2)
-        .attr("fill", d => colorScale(d.depth));
+    // We removed the individual block rendering here.
+    // Proceeding to Avatar/Text rendering...
 
     // Content on top
-    // Image
+
+    // 1. Standing Avatar Group
+    // Center the avatar group horizontally
+    // 1. Standing Avatar Group
+    // Center the avatar group horizontally
+    const avatarGroup = block.append("g")
+        .attr("transform", d => `translate(0, -10)`);
+
+
+    // Avatar "Token" - Lying flat (Sleeping) but 3D
+    // Shape: Isometric Square (Diamond) aligned with block
+    const avatarSize = 50; // Size in logical tree units
+    const tokenThick = 6;
+
+    // Matrix for "Floor Projection" matching toIso: x' = x-y, y' = (x+y)/2
+    // d3/SVG Matrix: matrix(a, b, c, d, e, f)
+    // a=1, b=0.5, c=-1, d=0.5
+    const isoMatrix = "matrix(1, 0.5, -1, 0.5, 0, 0)";
+
+    const tokenGroup = avatarGroup.append("g");
+    // No scale needed if we use iso coordinates explicitly or matrix
+
+    // 1. Token Thickness (Vertical Extrusion)
+    // Manually draw the "front" faces of the diamond extruded down
+    // Corners of a 50x50 square at (0,0):
+    // c1(0,-25), c2(25,0), c3(0,25), c4(-25,0) in projected space? 
+    // Let's use getBlockCorners helper for consistency
+    const tc = getBlockCorners(avatarSize, avatarSize);
+
+    // Left Face (c4 -> c3)
+    tokenGroup.append("path")
+        .attr("d", `M ${tc.c4[0]},${tc.c4[1]} L ${tc.c3[0]},${tc.c3[1]} L ${tc.c3[0]},${tc.c3[1] + tokenThick} L ${tc.c4[0]},${tc.c4[1] + tokenThick} Z`)
+        .attr("fill", "#999");
+
+    // Right Face (c3 -> c2)
+    tokenGroup.append("path")
+        .attr("d", `M ${tc.c3[0]},${tc.c3[1]} L ${tc.c2[0]},${tc.c2[1]} L ${tc.c2[0]},${tc.c2[1] + tokenThick} L ${tc.c3[0]},${tc.c3[1] + tokenThick} Z`)
+        .attr("fill", "#777");
+
+    // 2. Token Top (Diamond) - White Border
+    // We can use the matrix on a rect to generate the diamond naturally
+    tokenGroup.append("rect")
+        .attr("x", -avatarSize / 2 - 2)
+        .attr("y", -avatarSize / 2 - 2)
+        .attr("width", avatarSize + 4)
+        .attr("height", avatarSize + 4)
+        .attr("fill", "#fff")
+        .attr("stroke", "#ccc")
+        .attr("stroke-width", 1)
+        .attr("transform", isoMatrix);
+
+    // 3. Image (Projected)
     const clipId = d => `iso-clip-${d.data.id}`;
-    block.append("clipPath")
+
+    // Clip Path needs to be the diamond
+    tokenGroup.append("clipPath")
         .attr("id", clipId)
-        .append("circle")
-        .attr("r", 15)
-        .attr("cx", -w / 2 + 25)
-        .attr("cy", 0);
+        .append("rect")
+        .attr("x", -avatarSize / 2)
+        .attr("y", -avatarSize / 2)
+        .attr("width", avatarSize)
+        .attr("height", avatarSize)
+        .attr("transform", isoMatrix);
 
-    block.append("image")
+    tokenGroup.append("image")
         .attr("xlink:href", d => d.data.photo)
-        .attr("x", -w / 2 + 10)
-        .attr("y", -15)
-        .attr("width", 30)
-        .attr("height", 30)
+        .attr("x", -avatarSize / 2)
+        .attr("y", -avatarSize / 2)
+        .attr("width", avatarSize)
+        .attr("height", avatarSize)
         .attr("clip-path", `url(#${clipId})`)
-        .attr("preserveAspectRatio", "xMidYMid slice");
+        .attr("preserveAspectRatio", "xMidYMid slice")
+        .attr("transform", isoMatrix);
 
-    // Name
+    // Name - Below Avatar (Projected on Floor)
+    // Shifted significantly left (-50 logical screen X) to aggressively fix alignment
     block.append("text")
-        .attr("x", -w / 2 + 45)
-        .attr("y", -5)
+        .attr("x", 15)
+        .attr("y", 65)
         .text(d => d.data.name)
-        .style("font-size", "10px")
+        .style("font-size", "14px")
         .style("font-weight", "bold")
-        .style("fill", "#333")
-        .style("pointer-events", "none");
+        .style("fill", "#000")
+        .style("pointer-events", "none")
+        .style("text-anchor", "middle")
+        .attr("transform", isoMatrix);
 
     // Date/Gen
     block.append("text")
-        .attr("x", -w / 2 + 45)
-        .attr("y", 8)
+        .attr("x", 25)
+        .attr("y", 80)
         .text(d => d.data.relation)
-        .style("font-size", "8px")
-        .style("fill", "#666")
-        .style("pointer-events", "none");
+        .style("font-size", "12px") // Consistent font size
+        .style("fill", "#444")
+        .style("pointer-events", "none")
+        .style("text-anchor", "middle")
+        .attr("transform", isoMatrix);
 
 
     // Zoom Behavior
@@ -1134,4 +1379,4 @@ window.addEventListener("resize", () => {
 });
 
 // Initial Load
-initGlobe();
+initTree(); 
