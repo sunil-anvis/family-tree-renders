@@ -1,0 +1,187 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    background: black;
+    color: white;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+#zoom-controls {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#zoom-controls button {
+    width: 40px;
+    height: 40px;
+    border-radius: 5px;
+    font-size: 18px;
+    font-weight: bold;
+    background: rgba(16, 20, 24, 0.8);
+    border: 1px solid #4ecca3;
+    color: #4ecca3;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+#zoom-controls button:hover {
+    background: rgba(78, 204, 163, 0.2);
+    box-shadow: 0 0 10px rgba(78, 204, 163, 0.4);
+}
+
+#tree-container {
+    width: 100vw;
+    height: 100vh;
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(2px);
+}
+
+.modal-content {
+    background: rgba(16, 20, 24, 0.95);
+    border: 1px solid #4ecca3;
+    border-radius: 20px;
+    padding: 30px;
+    width: 300px;
+    /* Mid size */
+    text-align: center;
+    box-shadow: 0 0 20px rgba(78, 204, 163, 0.3);
+    position: relative;
+    transform: scale(1.1);
+    transition: transform 0.2s;
+}
+
+.modal-close {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.modal-close:hover {
+    color: white;
+}
+
+.modal-image {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 3px solid #4ecca3;
+    margin-bottom: 15px;
+}
+
+.modal-name {
+    margin: 0 0 5px 0;
+    font-size: 24px;
+    color: white;
+    font-weight: bold;
+}
+
+.modal-info {
+    margin: 0 0 15px 0;
+    color: #bbb;
+    font-size: 14px;
+}
+
+.modal-location {
+    color: #4ecca3;
+    font-weight: bold;
+    font-size: 16px;
+    margin: 0;
+}
+
+/* Globe Stylings */
+.geo-node circle {
+    transition: r 0.2s, stroke 0.2s;
+}
+
+.geo-node:hover circle {
+    r: 9px;
+    stroke: #66fcf1;
+    stroke-width: 2px;
+}
+
+.geo-node text {
+    pointer-events: none;
+    font-weight: bold;
+}
+
+/* View Controls */
+#view-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    gap: 10px;
+}
+
+.view-btn {
+    background: rgba(16, 20, 24, 0.8);
+    border: 1px solid #4ecca3;
+    color: #4ecca3;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+.view-btn:hover {
+    background: rgba(78, 204, 163, 0.2);
+}
+
+.view-btn.active {
+    background: #4ecca3;
+    color: #0b0c10;
+    box-shadow: 0 0 10px rgba(78, 204, 163, 0.4);
+}
+
+/* Tree Card Styles */
+.tree-card-bg {
+    fill: rgba(16, 20, 24, 0.9);
+    stroke: #4ecca3;
+    stroke-width: 1px;
+    filter: drop-shadow(0 0 5px rgba(78, 204, 163, 0.2));
+}
+
+.tree-card-name {
+    fill: white;
+    font-size: 14px;
+    font-weight: bold;
+    font-family: 'Segoe UI', sans-serif;
+    pointer-events: none;
+}
+
+.tree-card-relation {
+    fill: #aaa;
+    font-size: 11px;
+    font-family: 'Segoe UI', sans-serif;
+    pointer-events: none;
+}
+
+.tree-card-img-clip {
+    pointer-events: none;
+}
