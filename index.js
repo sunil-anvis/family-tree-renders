@@ -149,7 +149,10 @@ function initGlobe() {
     svg.on(".zoom", null); // Clear global zoom if any
 
     // Re-create Groups (Order matters for layering)
-    globeGroup = svg.append("g");  // Water + Graticule
+    // 1. Set Background for Globe View (Space Galaxy)
+    svg.style("background", "radial-gradient(circle at center, #02111b 0%, #000000 100%)");
+
+    globeGroup = svg.append("g");  // Water + Graticules
     landGroup = svg.append("g");   // Landmasses (Countries)
     stateGroup = svg.append("g");  // States/Provinces
     riverGroup = svg.append("g");  // Rivers
@@ -542,6 +545,9 @@ function initTree() {
     svg.on(".drag", null); // Clear drag
     svg.on(".zoom", null); // Clear zoom
 
+    // 2. Set Background for Tree View (Multicolor Gradient)
+    svg.style("background", "linear-gradient(45deg, #1a2980 0%, #26d0ce 100%)");
+
     const cardWidth = 180;
     const cardHeight = 60;
 
@@ -656,24 +662,22 @@ function initTree() {
 }
 
 // --- 4. Fan Logic ---
+// --- 4. Fan Logic ---
 function initFan() {
     svg.selectAll("*").remove();
     svg.on(".drag", null);
     svg.on(".zoom", null);
 
+    // 3. Set Background for Fan View (Black)
+    svg.style("background", "black");
+
     // Container Group
-    // We don't set a static transform here; the zoom behavior will handle it.
     const g = svg.append("g");
 
     // Reduce radius slightly to fit label
     const radius = Math.min(width, height) * 0.45;
 
-    const partition = d3.partition()
-        .size([2 * Math.PI, radius]) // Full 360 degrees
-        .padding(0);
-
     const root = d3.hierarchy(familyData)
-        .sum(d => 1)
         .sort((a, b) => b.height - a.height || a.data.name.localeCompare(b.data.name));
 
     // Color Setup: Assign colors based on Gender
@@ -689,9 +693,41 @@ function initFan() {
         }
     });
 
-    root.borderColor = "transparent"; // No border for root
+    // MANUAL LAYOUT: Equal Sibling Angles + Full Radius
+    // 1. Calculate Y (Radial) steps
+    // Divide radius by (maxDepth + 1). Root is at center (0).
+    // Actually standard partition puts root at center.
+    const maxDepth = root.height + 1; // +1 for root level? root depth is 0. height is max depth from root.
+    // If root.height is 3, we have levels 0, 1, 2, 3. Total 4 levels.
+    const layerDepth = radius / (root.height + 1);
 
-    partition(root);
+    // 2. Perform Layout (DFS)
+    // Root takes full 360 (0 to 2PI)
+    root.x0 = 0;
+    root.x1 = 2 * Math.PI;
+    root.y0 = 0;
+    root.y1 = layerDepth; // Root circle
+
+    root.eachBefore(d => {
+        // Compute children angles equaly
+        if (d.children && d.children.length > 0) {
+            const range = d.x1 - d.x0;
+            const step = range / d.children.length;
+
+            d.children.forEach((child, i) => {
+                child.x0 = d.x0 + i * step;
+                child.x1 = d.x0 + (i + 1) * step;
+
+                child.y0 = d.y1;
+                // If leaf, go to full radius. Else, next layer.
+                if (!child.children || child.children.length === 0) {
+                    child.y1 = radius;
+                } else {
+                    child.y1 = child.y0 + layerDepth;
+                }
+            });
+        }
+    });
 
     const arc = d3.arc()
         .startAngle(d => d.x0) // Start from 0
@@ -808,7 +844,251 @@ function initFan() {
     svg.call(zoom.transform, initialTransform);
 }
 
-// --- 5. Switcher & Event Listeners ---
+// --- 5. Isometric 3D Logic ---
+function init3DTree() {
+    svg.selectAll("*").remove();
+    svg.on(".drag", null);
+    svg.on(".zoom", null);
+
+    // 4. Set Background for 3D View (Checkered Grid)
+    svg.style("background", "#e0e5ec");
+
+    // Add CSS Grid Pattern using defs
+    const defs = svg.append("defs");
+    const pattern = defs.append("pattern")
+        .attr("id", "grid-pattern")
+        .attr("width", 40)
+        .attr("height", 40)
+        .attr("patternUnits", "userSpaceOnUse");
+
+    pattern.append("rect")
+        .attr("width", 40)
+        .attr("height", 40)
+        .attr("fill", "#e0e5ec");
+
+    pattern.append("path")
+        .attr("d", "M 20 0 L 0 0 0 20")
+        .attr("fill", "none")
+        .attr("stroke", "white")
+        .attr("stroke-width", 2);
+    pattern.append("path")
+        .attr("d", "M 40 20 L 20 20 20 40")
+        .attr("fill", "none")
+        .attr("stroke", "white")
+        .attr("stroke-width", 2);
+
+    svg.append("rect")
+        .attr("width", "100%")
+        .attr("height", "100%")
+        .attr("fill", "url(#grid-pattern)");
+
+    const g = svg.append("g")
+        .attr("transform", `translate(${width / 2}, 100)`); // Initial offset
+
+    // Standard Tree Layout First
+    const treeLayout = d3.tree()
+        .nodeSize([120, 100]) // Compact node size
+        .separation((a, b) => a.parent == b.parent ? 1.2 : 1.5);
+
+    const root = d3.hierarchy(familyData);
+    treeLayout(root);
+
+    // Isometric Projection Helper
+    // Projects (x, y) on floor to Screen (x, y)
+    // x: horizontal in standard tree
+    // y: vertical depth in standard tree
+    // Iso rotation: 
+    // isoX = (x - y) * cos(30)
+    // isoY = (x + y) * sin(30)
+    const toIso = (x, y) => {
+        // Adjust scales to match the "slanted" look
+        // In D3 tree: x is breadth (wide), y is depth (down)
+        // We want depth to go "down-right" and breadth "down-left"?
+        // Let's try standard isometric
+        const isoX = (x - y) * 1;
+        const isoY = (x + y) * 0.5;
+        return [isoX, isoY];
+    };
+
+    // Calculate Iso Coords for all nodes
+    root.descendants().forEach(d => {
+        [d.isoX, d.isoY] = toIso(d.x, d.y);
+    });
+
+    // Links
+    // Orthogonal links in 3D: Move along Y axis (depth) then X axis (breadth)
+    // We draw them as path segments
+    g.selectAll(".iso-link")
+        .data(root.links())
+        .enter().append("path")
+        .attr("class", "iso-link")
+        .attr("d", d => {
+            const s = { x: d.source.isoX, y: d.source.isoY, ox: d.source.x, oy: d.source.y };
+            const t = { x: d.target.isoX, y: d.target.isoY, ox: d.target.x, oy: d.target.y };
+
+            // Constructing an "elbow" in 2D space then projecting?
+            // Standard elbow: Source -> (Source.x, Target.y) -> Target
+            // No, tree is (x,y). Elbow: (sx, sy) -> (sx, ty) -> (tx, ty)? NO.
+            // Tree usually: (sx, sy) -> (sx, (sy+ty)/2) -> (tx, (sy+ty)/2) -> (tx, ty)
+
+            // Let's project key points
+            const midY = (s.oy + t.oy) / 2;
+            const p1 = toIso(s.ox, midY); // Down halfway
+            const p2 = toIso(t.ox, midY); // Across
+
+            return `M${s.x},${s.y} L${p1[0]},${p1[1]} L${p2[0]},${p2[1]} L${t.x},${t.y}`;
+        })
+        .attr("fill", "none")
+        .attr("stroke", "#999")
+        .attr("stroke-width", 2)
+        .attr("stroke-linecap", "round");
+
+    // Nodes (3D Blocks)
+    const nodes = g.selectAll(".iso-node")
+        .data(root.descendants())
+        .enter().append("g")
+        .attr("class", "iso-node")
+        .style("cursor", "pointer")
+        .attr("transform", d => `translate(${d.isoX},${d.isoY})`) // z-index sorting by y?
+        // Sort by depth (y) and then x to ensure correct overlap?
+        // In isometric painter's algorithm: draw furthest back first.
+        // lowest (x+y) first?
+        // tree y increases, so root (0) is top. children are bottom.
+        // We render typically top-down in DOM order. 
+        // Root is at top of screen? No, isoY increases. Root is top.
+        // Children (larger y) are lower on screen. They should be ON TOP of parents if overlapping vertical?
+        // Usually lower on screen = closer to camera = paint last.
+        // D3 renders preorder. Parents first.
+        // So parents (background) rendered first, children (foreground) rendered last. Perfect.
+        .on("click", (event, d) => {
+            event.stopPropagation();
+            showModal(d);
+        });
+
+    // Block Dimensions
+    const bw = 80;
+    const bh = 50; // Top face dimensions
+    const depth = 15; // Extrusion height
+
+    // Colors
+    const colorScale = d3.scaleOrdinal(d3.schemeSet3);
+
+    // Shadow (Bottom/Floor shadow)
+    nodes.append("ellipse")
+        .attr("cx", 0)
+        .attr("cy", depth * 1.5)
+        .attr("rx", bw * 0.6)
+        .attr("ry", bh * 0.6)
+        .attr("fill", "rgba(0,0,0,0.1)");
+
+    // 3D Block Group - Shift UP so (0,0) is "on the floor"
+    const block = nodes.append("g")
+        .attr("transform", `translate(0, ${-depth})`);
+
+    // Side Faces (Darker)
+    // Left Face
+    // path: Bottom-mid -> Left-mid -> Left-mid-up -> Bottom-mid-up
+    // Let's draw a simple "Right" and "Front" extrusion
+    // Assuming "Diamond" shape for top?
+    // Let's draw "Rounded Rect" in perspective
+
+    // Simplification: Rectangle with rounded corners
+    const w = 80, h = 50;
+
+    // Front Face (Thick edge)
+    block.append("path")
+        .attr("d", `
+            M ${-w / 2}, 0 
+            L ${w / 2}, 0 
+            L ${w / 2}, ${depth} 
+            L ${-w / 2}, ${depth} Z
+        `)
+        .attr("fill", d => d3.color(colorScale(d.depth)).darker(0.7).hex())
+        .attr("transform", `translate(0, ${h / 2})`); // Shift to bottom edge of top face?
+
+    // But that's flat. Isometric block:
+    //      / \
+    //     | T |
+    //     \ /
+    //     | | 
+    //     \_/
+
+    // Let's simulate the visual from image: 
+    // It looks like a "slab" with rounded corners.
+
+    // Extrusion Layer (Darker)
+    block.append("rect")
+        .attr("x", -w / 2)
+        .attr("y", -h / 2 + depth)
+        .attr("width", w)
+        .attr("height", h)
+        .attr("rx", 10)
+        .attr("fill", d => d3.color(colorScale(d.depth)).darker(0.5).hex());
+
+    // Top Face (Lighter)
+    block.append("rect")
+        .attr("x", -w / 2)
+        .attr("y", -h / 2)
+        .attr("width", w)
+        .attr("height", h)
+        .attr("rx", 10)
+        //.attr("stroke", "white")
+        //.attr("stroke-width", 2)
+        .attr("fill", d => colorScale(d.depth));
+
+    // Content on top
+    // Image
+    const clipId = d => `iso-clip-${d.data.id}`;
+    block.append("clipPath")
+        .attr("id", clipId)
+        .append("circle")
+        .attr("r", 15)
+        .attr("cx", -w / 2 + 25)
+        .attr("cy", 0);
+
+    block.append("image")
+        .attr("xlink:href", d => d.data.photo)
+        .attr("x", -w / 2 + 10)
+        .attr("y", -15)
+        .attr("width", 30)
+        .attr("height", 30)
+        .attr("clip-path", `url(#${clipId})`)
+        .attr("preserveAspectRatio", "xMidYMid slice");
+
+    // Name
+    block.append("text")
+        .attr("x", -w / 2 + 45)
+        .attr("y", -5)
+        .text(d => d.data.name)
+        .style("font-size", "10px")
+        .style("font-weight", "bold")
+        .style("fill", "#333")
+        .style("pointer-events", "none");
+
+    // Date/Gen
+    block.append("text")
+        .attr("x", -w / 2 + 45)
+        .attr("y", 8)
+        .text(d => d.data.relation)
+        .style("font-size", "8px")
+        .style("fill", "#666")
+        .style("pointer-events", "none");
+
+
+    // Zoom Behavior
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 5])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        });
+
+    svg.call(zoom);
+    // Center logic
+    const initialTransform = d3.zoomIdentity.translate(width / 2, 50).scale(1);
+    svg.call(zoom.transform, initialTransform);
+}
+
+// --- 6. Switcher & Event Listeners ---
 
 function switchView(view) {
     currentView = view;
@@ -818,6 +1098,8 @@ function switchView(view) {
         initTree();
     } else if (view === "fan") {
         initFan();
+    } else if (view === "isometric") {
+        init3DTree();
     }
 }
 
@@ -846,6 +1128,8 @@ window.addEventListener("resize", () => {
         initTree();
     } else if (currentView === 'fan') {
         initFan();
+    } else if (currentView === 'isometric') {
+        init3DTree();
     }
 });
 
