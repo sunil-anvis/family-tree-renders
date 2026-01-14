@@ -185,3 +185,59 @@ body {
 .tree-card-img-clip {
     pointer-events: none;
 }
+
+/* Galaxy View Styles */
+.galaxy-node circle {
+    transition: r 0.3s ease, fill 0.3s ease;
+}
+
+.galaxy-node:hover circle {
+    stroke: #fff;
+    stroke-width: 2px;
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.8));
+}
+
+.galaxy-link {
+    transition: stroke-opacity 0.5s;
+}
+
+/* Twinkle Animation */
+@keyframes twinkle {
+    0% {
+        opacity: 0.8;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+
+    100% {
+        opacity: 0.8;
+        transform: scale(1);
+    }
+}
+
+.star-twinkle {
+    animation: twinkle 3s infinite ease-in-out;
+}
+
+/* Heartbeat Animation */
+/* Heartbeat/Bounce Animation (Vertical) */
+@keyframes heartbeat {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+.heartbeat {
+    animation: heartbeat 1.5s infinite ease-in-out;
+    /* Removed transform-origin as it's not needed for translation */
+}

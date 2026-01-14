@@ -338,6 +338,7 @@ function initGlobe() {
 
     nodeElements.append("circle")
         .attr("r", d => d.data.isMe ? 8 : 6)
+        .classed("heartbeat", d => d.data.isMe)
         .attr("fill", d => d.data.isMe ? "#FFD700" : "#ff0000")
         .attr("stroke", "#fff")
         .attr("stroke-width", 2);
@@ -576,12 +577,10 @@ function initTree() {
         .enter().append("path")
         .attr("class", "tree-link")
         .attr("d", d => {
-            return d3.linkVertical()
-                .x(d => d.x)
-                .y(d => d.y)({
-                    source: { x: d.source.x, y: d.source.y + cardHeight / 2 },
-                    target: { x: d.target.x, y: d.target.y - cardHeight / 2 }
-                });
+            const s = { x: d.source.x, y: d.source.y + cardHeight / 2 };
+            const t = { x: d.target.x, y: d.target.y - cardHeight / 2 };
+            const midY = (s.y + t.y) / 2;
+            return `M ${s.x},${s.y} V ${midY} H ${t.x} V ${t.y}`;
         })
         .attr("fill", "none")
         .attr("stroke", "#4ecca3")
@@ -1135,61 +1134,82 @@ function init3DTree() {
     svg.on(".drag", null);
     svg.on(".zoom", null);
 
-    // 4. Set Background for 3D View (Checkered Grid)
-    svg.style("background", "#e0e5ec");
+    // 4. Set Background for 3D View (Isometric Grids + Darker)
+    svg.style("background", "#d1d8e0");
+
+    const bh = 160; // INCREASED DEPTH to fit text
+    const extrusion = 60; // INCREASED HEIGHT
+    const genColors = ["#FEF3C7", "#FFEDD5", "#FCE7F3", "#EDE9FE", "#DBEAFE"];
+    const getGenColor = (d) => genColors[d.depth % genColors.length];
 
     // Add CSS Grid Pattern using defs
     const defs = svg.append("defs");
+
+    // 2. Shadow Filter (Drop Shadow)
+    const filter = defs.append("filter")
+        .attr("id", "drop-shadow")
+        .attr("x", "-50%")
+        .attr("y", "-50%")
+        .attr("width", "200%")
+        .attr("height", "200%");
+
+    filter.append("feGaussianBlur")
+        .attr("in", "SourceAlpha")
+        .attr("stdDeviation", 4)
+        .attr("result", "blur");
+
+    filter.append("feOffset")
+        .attr("in", "blur")
+        .attr("dx", 15) // Move Right
+        .attr("dy", -15) // Move Up (Top-Right)
+        .attr("result", "offsetBlur");
+
+    // 3. Contact Shadow Filter (Sharp)
+    const contactFilter = defs.append("filter")
+        .attr("id", "contact-shadow")
+        .attr("x", "-20%")
+        .attr("y", "-20%")
+        .attr("width", "140%")
+        .attr("height", "140%");
+
+    contactFilter.append("feGaussianBlur")
+        .attr("in", "SourceAlpha")
+        .attr("stdDeviation", 1);
+
+    // Isometric Grid Pattern
+    // We want diagonal lines forming diamonds
     const pattern = defs.append("pattern")
-        .attr("id", "grid-pattern")
-        .attr("width", 40)
-        .attr("height", 40)
+        .attr("id", "iso-grid-pattern")
+        .attr("width", 60)
+        .attr("height", 30) // 2:1 ratio for isometric
         .attr("patternUnits", "userSpaceOnUse");
 
-    pattern.append("rect")
-        .attr("width", 40)
-        .attr("height", 40)
-        .attr("fill", "#e0e5ec");
-
+    // Diagonal Cross
     pattern.append("path")
-        .attr("d", "M 20 0 L 0 0 0 20")
+        .attr("d", "M 0 15 L 30 0 L 60 15 L 30 30 Z")
         .attr("fill", "none")
         .attr("stroke", "white")
-        .attr("stroke-width", 2);
-    pattern.append("path")
-        .attr("d", "M 40 20 L 20 20 20 40")
-        .attr("fill", "none")
-        .attr("stroke", "white")
-        .attr("stroke-width", 2);
+        .attr("stroke-width", 1)
+        .attr("stroke-opacity", 0.5);
 
     svg.append("rect")
         .attr("width", "100%")
         .attr("height", "100%")
-        .attr("fill", "url(#grid-pattern)");
+        .attr("fill", "url(#iso-grid-pattern)");
 
     const g = svg.append("g")
         .attr("transform", `translate(${width / 2}, 100)`); // Initial offset
 
     // Standard Tree Layout First
     const treeLayout = d3.tree()
-        .nodeSize([240, 150]) // Expanded more for dynamic widths
+        .nodeSize([240, 280]) // Increased Y spacing for deeper blocks
         .separation((a, b) => a.parent == b.parent ? 1.2 : 1.5);
 
     const root = d3.hierarchy(familyData);
     treeLayout(root);
 
     // Isometric Projection Helper
-    // Projects (x, y) on floor to Screen (x, y)
-    // x: horizontal in standard tree
-    // y: vertical depth in standard tree
-    // Iso rotation: 
-    // isoX = (x - y) * cos(30)
-    // isoY = (x + y) * sin(30)
     const toIso = (x, y) => {
-        // Adjust scales to match the "slanted" look
-        // In D3 tree: x is breadth (wide), y is depth (down)
-        // We want depth to go "down-right" and breadth "down-left"?
-        // Let's try standard isometric
         const isoX = (x - y) * 1;
         const isoY = (x + y) * 0.5;
         return [isoX, isoY];
@@ -1203,50 +1223,19 @@ function init3DTree() {
     // Calculate Dynamic Widths
     const bw = 120; // Base width
     root.descendants().forEach(d => {
-        // approx 8px per char + padding
-        // If name is short, use bw. If long, expand.
         const nameLen = d.data.name.length;
         d.width = Math.max(bw, nameLen * 8 + 60);
     });
 
-    // Links
-    // Orthogonal links in 3D: Move along Y axis (depth) then X axis (breadth)
-    // We draw them as path segments
-    g.selectAll(".iso-link")
-        .data(root.links())
-        .enter().append("path")
-        .attr("class", "iso-link")
-        .attr("d", d => {
-            const s = { x: d.source.isoX, y: d.source.isoY, ox: d.source.x, oy: d.source.y };
-            const t = { x: d.target.isoX, y: d.target.isoY, ox: d.target.x, oy: d.target.y };
-
-            // Constructing an "elbow" in 2D space then projecting?
-            // Standard elbow: Source -> (Source.x, Target.y) -> Target
-            // No, tree is (x,y). Elbow: (sx, sy) -> (sx, ty) -> (tx, ty)? NO.
-            // Tree usually: (sx, sy) -> (sx, (sy+ty)/2) -> (tx, (sy+ty)/2) -> (tx, ty)
-
-            // Let's project key points
-            const midY = (s.oy + t.oy) / 2;
-            const p1 = toIso(s.ox, midY); // Down halfway
-            const p2 = toIso(t.ox, midY); // Across
-
-            return `M${s.x},${s.y} L${p1[0]},${p1[1]} L${p2[0]},${p2[1]} L${t.x},${t.y}`;
-        })
-        .attr("fill", "none")
-        .attr("stroke", "#999")
-        .attr("stroke-width", 2)
-        .attr("stroke-linecap", "round");
-
     // --- Shared Sibling Backgrounds ---
-    // Group nodes by parent to identify siblings
     const siblingGroups = d3.group(root.descendants(), d => d.parent);
 
-    // Render Order: Links -> Platforms -> Nodes (Content)
+    // LAYERS: Shadows -> Platforms -> Nodes
 
-    // 1. Links (Existing code moves here or stays before?) 
-    // Links are already drawn before this block in the file (lines 945-962). Keep them there.
+    // 0. Shadows Layer
+    const shadowsLayer = g.append("g").attr("class", "iso-shadows");
 
-    // 2. Platforms (Shared Backgrounds)
+    // 1. Platforms (Shared Backgrounds)
     const platformsLayer = g.append("g").attr("class", "iso-platforms");
 
     // Helper for Block Geometry (Reused)
@@ -1258,23 +1247,13 @@ function init3DTree() {
         return { c1, c2, c3, c4 };
     }
 
-    const bh = 75; // Depth of the block on the floor
-    const extrusion = 15; // Vertical thickness
-    // Colors
-    const genColors = ["#FEF3C7", "#FFEDD5", "#FCE7F3", "#EDE9FE", "#DBEAFE"];
-    const getGenColor = (d) => genColors[d.depth % genColors.length];
-
-    // Iterate through groups and render platforms
+    // Iterate through groups and render platforms + shadows
     siblingGroups.forEach((siblings, parent) => {
         if (!siblings || siblings.length === 0) return;
 
-        // Calculate Bounding Box of the group in Tree Space (x, y)
-        // Tree X is the width/horizontal axis. Tree Y is constant for siblings.
-        // We include half-width of the outer nodes + some padding.
         let minX = Infinity;
         let maxX = -Infinity;
         const commonY = siblings[0].y;
-        const depth = siblings[0].depth;
 
         // For coloring, we use the first sibling's data
         const rep = siblings[0];
@@ -1286,9 +1265,6 @@ function init3DTree() {
             if (right > maxX) maxX = right;
         });
 
-        // Add padding between siblings/edges?
-        // Reference image shows they are tight on the "platform".
-        // Let's add a small margin to the whole platform.
         const padding = 10;
         minX -= padding;
         maxX += padding;
@@ -1296,13 +1272,35 @@ function init3DTree() {
         const platformWidth = maxX - minX;
         const centerX = (minX + maxX) / 2;
 
-        // Convert Center(x,y) to Iso(x,y)
         const [isoCx, isoCy] = toIso(centerX, commonY);
+
+        // --- RENDER SHADOWS ---
+        // 1. Soft Drop Shadow (Broader)
+        shadowsLayer.append("path")
+            .attr("d", () => {
+                const { c1, c2, c3, c4 } = getBlockCorners(platformWidth, bh);
+                return `M ${c1[0]},${c1[1]} L ${c2[0]},${c2[1]} L ${c3[0]},${c3[1]} L ${c4[0]},${c4[1]} Z`;
+            })
+            .attr("transform", `translate(${isoCx}, ${isoCy}) scale(1.05)`) // Slightly bigger
+            .attr("fill", "black")
+            .attr("opacity", 0.3) // Visible opacity
+            .attr("filter", "url(#drop-shadow)");
+
+        // 2. Contact Shadow (Tight/Darker)
+        shadowsLayer.append("path")
+            .attr("d", () => {
+                const { c1, c2, c3, c4 } = getBlockCorners(platformWidth, bh);
+                return `M ${c1[0]},${c1[1]} L ${c2[0]},${c2[1]} L ${c3[0]},${c3[1]} L ${c4[0]},${c4[1]} Z`;
+            })
+            .attr("transform", `translate(${isoCx}, ${isoCy})`)
+            .attr("fill", "#000") // Pitch black base
+            .attr("opacity", 0.5) // High opacity
+            .attr("filter", "url(#contact-shadow)");
+
+        // --- RENDER PLATFORM ---
 
         const platform = platformsLayer.append("g")
             .attr("transform", `translate(${isoCx}, ${isoCy}) translate(0, ${-extrusion})`);
-
-        // Draw Platform - Same logic as individual block but using platformWidth
 
         // Side Faces (Darker)
         // Left Face
@@ -1331,6 +1329,43 @@ function init3DTree() {
     });
 
 
+    // Links (Rendered AFTER platforms to be on top)
+    g.selectAll(".iso-link")
+        .data(root.links())
+        .enter().append("path")
+        .attr("class", "iso-link")
+        .attr("d", d => {
+            // Source (Parent): Connect from Bottom Edge (Logical y + bh/2)
+            const startLogX = d.source.x;
+            const startLogY = d.source.y + bh / 2;
+
+            // Target (Child): Connect to Top Edge (Logical y - bh/2)
+            const endLogX = d.target.x;
+            const endLogY = d.target.y - bh / 2;
+
+            const [sx, sy] = toIso(startLogX, startLogY);
+            const [tx, ty] = toIso(endLogX, endLogY);
+
+            // Elbow points need to be calculated based on these new edge points
+            const midY = (startLogY + endLogY) / 2;
+            const p1 = toIso(startLogX, midY);
+            const p2 = toIso(endLogX, midY);
+
+            // Connect from the TOP of the blocks
+            // Shift up by extrusion amount
+            const z = -extrusion;
+
+            return `M${sx},${sy + z} L${p1[0]},${p1[1] + z} L${p2[0]},${p2[1] + z} L${tx},${ty + z}`;
+        })
+        .attr("fill", "none")
+        .attr("stroke", d => {
+            // "Second connection" (Gen 1 to Gen 2) -> Dark Green
+            if (d.target.depth === 2) return "#2E8B57";
+            return d3.interpolateRainbow(d.target.depth / 4);
+        })
+        .attr("stroke-width", 2)
+        .attr("stroke-linecap", "round");
+
     // 3. Nodes (Content Only)
     // Individual items on top of the platforms
     const nodes = g.selectAll(".iso-node")
@@ -1348,38 +1383,34 @@ function init3DTree() {
     const block = nodes.append("g")
         .attr("transform", `translate(0, ${-extrusion})`);
 
-    // We removed the individual block rendering here.
-    // Proceeding to Avatar/Text rendering...
-
-    // Content on top
-
     // 1. Standing Avatar Group
-    // Center the avatar group horizontally
-    // 1. Standing Avatar Group
-    // Center the avatar group horizontally
     const avatarGroup = block.append("g")
         .attr("transform", d => `translate(0, -10)`);
 
 
-    // Avatar "Token" - Lying flat (Sleeping) but 3D
-    // Shape: Isometric Square (Diamond) aligned with block
-    const avatarSize = 50; // Size in logical tree units
+    // Avatar "Token"
+    const avatarSize = 50;
     const tokenThick = 6;
 
-    // Matrix for "Floor Projection" matching toIso: x' = x-y, y' = (x+y)/2
-    // d3/SVG Matrix: matrix(a, b, c, d, e, f)
-    // a=1, b=0.5, c=-1, d=0.5
+    // Matrix for "Floor Projection" match toIso
     const isoMatrix = "matrix(1, 0.5, -1, 0.5, 0, 0)";
 
-    const tokenGroup = avatarGroup.append("g");
-    // No scale needed if we use iso coordinates explicitly or matrix
+    const tokenGroup = avatarGroup.append("g")
+        .classed("heartbeat", d => d.data.isMe)
+        .attr("transform", "translate(20, -10)"); // Centered on platform (Logical Y -20)
 
-    // 1. Token Thickness (Vertical Extrusion)
-    // Manually draw the "front" faces of the diamond extruded down
-    // Corners of a 50x50 square at (0,0):
-    // c1(0,-25), c2(25,0), c3(0,25), c4(-25,0) in projected space? 
-    // Let's use getBlockCorners helper for consistency
     const tc = getBlockCorners(avatarSize, avatarSize);
+
+    // Token Shadows (Individual)
+    // Dark Contact Shadow (Tight)
+    tokenGroup.append("ellipse")
+        .attr("cx", 0)
+        .attr("cy", 0)
+        .attr("rx", 32)
+        .attr("ry", 16)
+        .attr("fill", "black")
+        .attr("opacity", 0.4)
+        .attr("filter", "url(#contact-shadow)");
 
     // Left Face (c4 -> c3)
     tokenGroup.append("path")
@@ -1392,21 +1423,19 @@ function init3DTree() {
         .attr("fill", "#777");
 
     // 2. Token Top (Diamond) - White Border
-    // We can use the matrix on a rect to generate the diamond naturally
     tokenGroup.append("rect")
         .attr("x", -avatarSize / 2 - 2)
         .attr("y", -avatarSize / 2 - 2)
         .attr("width", avatarSize + 4)
         .attr("height", avatarSize + 4)
         .attr("fill", "#fff")
-        .attr("stroke", "#ccc")
-        .attr("stroke-width", 1)
+        .attr("stroke", d => d.data.isMe ? "#FFD700" : "#ccc")
+        .attr("stroke-width", d => d.data.isMe ? 4 : 1)
         .attr("transform", isoMatrix);
 
     // 3. Image (Projected)
     const clipId = d => `iso-clip-${d.data.id}`;
 
-    // Clip Path needs to be the diamond
     tokenGroup.append("clipPath")
         .attr("id", clipId)
         .append("rect")
@@ -1427,10 +1456,9 @@ function init3DTree() {
         .attr("transform", isoMatrix);
 
     // Name - Below Avatar (Projected on Floor)
-    // Shifted significantly left (-50 logical screen X) to aggressively fix alignment
     block.append("text")
-        .attr("x", 15)
-        .attr("y", 65)
+        .attr("x", 0)
+        .attr("y", 30) // Adjusted up (-20)
         .text(d => d.data.name)
         .style("font-size", "14px")
         .style("font-weight", "bold")
@@ -1441,10 +1469,10 @@ function init3DTree() {
 
     // Date/Gen
     block.append("text")
-        .attr("x", 25)
-        .attr("y", 80)
+        .attr("x", 0)
+        .attr("y", 45) // Adjusted up (-20)
         .text(d => d.data.relation)
-        .style("font-size", "12px") // Consistent font size
+        .style("font-size", "12px")
         .style("fill", "#444")
         .style("pointer-events", "none")
         .style("text-anchor", "middle")
@@ -1464,6 +1492,130 @@ function init3DTree() {
     svg.call(zoom.transform, initialTransform);
 }
 
+
+// --- 5. Vertical Tree Logic (Left-to-Right) ---
+function initVerticalTree() {
+    svg.selectAll("*").remove(); // Clear SVG
+    svg.on(".drag", null); // Clear drag
+    svg.on(".zoom", null); // Clear zoom
+
+    // Background for Vertical Tree View
+    svg.style("background", "linear-gradient(45deg, #1a2980 0%, #26d0ce 100%)");
+
+    const cardWidth = 180;
+    const cardHeight = 60;
+
+    // Tree Layout Group
+    // Translate slightly right to give space for root
+    const g = svg.append("g").attr("transform", `translate(100, ${height / 2})`);
+
+    const root = d3.hierarchy(familyData);
+
+    const treeLayout = d3.tree()
+        .nodeSize([cardHeight + 40, cardWidth + 50]) // Swapped: Height, Width spacing
+        .separation((a, b) => a.parent == b.parent ? 1.1 : 1.25);
+
+    treeLayout(root);
+
+    // Links
+    g.selectAll(".tree-link")
+        .data(root.links())
+        .enter().append("path")
+        .attr("class", "tree-link")
+        .attr("d", d => {
+            // Swap X and Y for Left-to-Right
+            const s = { y: d.source.x, x: d.source.y + cardWidth / 2 };
+            const t = { y: d.target.x, x: d.target.y - cardWidth / 2 };
+
+            // Straight Orthogonal Line (Horizontal first)
+            const midX = (s.x + t.x) / 2;
+            // M startX,startY H midX V endY H endX
+            return `M ${s.x},${s.y} H ${midX} V ${t.y} H ${t.x}`;
+        })
+        .attr("fill", "none")
+        .attr("stroke", "#4ecca3")
+        .attr("stroke-width", 1.5)
+        .attr("opacity", 0.6);
+
+    // Nodes (Cards)
+    const nodes = g.selectAll(".tree-node")
+        .data(root.descendants())
+        .enter().append("g")
+        .attr("class", "tree-node")
+        // Swap X and Y for translation
+        .attr("transform", d => `translate(${d.y},${d.x})`)
+        .style("cursor", "pointer")
+        .on("click", (event, d) => {
+            event.stopPropagation();
+            showModal(d);
+        });
+
+    // Card Background
+    nodes.append("rect")
+        .attr("x", -cardWidth / 2)
+        .attr("y", -cardHeight / 2)
+        .attr("width", cardWidth)
+        .attr("height", cardHeight)
+        .attr("rx", 10)
+        .attr("class", "tree-card-bg");
+
+    // Clip Path for Image
+    const clipId = (d) => `vclip-${d.data.id}`;
+
+    nodes.append("clipPath")
+        .attr("id", clipId)
+        .append("circle")
+        .attr("r", 20)
+        .attr("cx", -cardWidth / 2 + 30)
+        .attr("cy", 0);
+
+    // Profile Image
+    nodes.append("image")
+        .attr("xlink:href", d => d.data.photo)
+        .attr("x", -cardWidth / 2 + 10)
+        .attr("y", -20)
+        .attr("width", 40)
+        .attr("height", 40)
+        .attr("clip-path", d => `url(#${clipId(d)})`)
+        .attr("preserveAspectRatio", "xMidYMid slice");
+
+    // Ring around image
+    nodes.append("circle")
+        .attr("r", 21)
+        .attr("cx", -cardWidth / 2 + 30)
+        .attr("cy", 0)
+        .attr("fill", "none")
+        .attr("stroke", d => d.data.isMe ? "#FFD700" : "#4ecca3")
+        .attr("stroke-width", d => d.data.isMe ? 4 : 1.5);
+
+    // Information Group
+    const textGroup = nodes.append("g")
+        .attr("transform", `translate(${-cardWidth / 2 + 60}, 0)`);
+
+    // Name
+    textGroup.append("text")
+        .attr("class", "tree-card-name")
+        .attr("y", -2)
+        .text(d => d.data.name);
+
+    // Relation
+    textGroup.append("text")
+        .attr("class", "tree-card-relation")
+        .attr("y", 12)
+        .text(d => d.data.relation);
+
+    // Zoom
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 5])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        });
+
+    // Center initially (Left side)
+    const initialTransform = d3.zoomIdentity.translate(100, height / 2).scale(1);
+    svg.call(zoom).call(zoom.transform, initialTransform);
+}
+
 // --- 6. Switcher & Event Listeners ---
 
 function switchView(view) {
@@ -1472,6 +1624,8 @@ function switchView(view) {
         initGlobe();
     } else if (view === "tree") {
         initTree();
+    } else if (view === "vertical-tree") {
+        initVerticalTree();
     } else if (view === "fan") {
         initFan();
     } else if (view === "isometric") {
@@ -1502,8 +1656,11 @@ window.addEventListener("resize", () => {
         initGlobe();
     } else if (currentView === 'tree') {
         initTree();
+    } else if (currentView === 'vertical-tree') {
+        initVerticalTree();
     } else if (currentView === 'fan') {
         initFan();
+
     } else if (currentView === 'isometric') {
         init3DTree();
     }
