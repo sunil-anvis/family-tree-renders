@@ -671,6 +671,11 @@ function initTree() {
 // --- 4. Fan Logic ---
 // --- 4. Fan Logic ---
 function initFan() {
+    // 1. Update Dimensions on Init (Fixes centering if resized)
+    width = window.innerWidth;
+    height = window.innerHeight;
+    svg.attr("width", width).attr("height", height);
+
     svg.selectAll("*").remove();
     svg.on(".drag", null);
     svg.on(".zoom", null);
@@ -683,9 +688,33 @@ function initFan() {
     // --- 1. Define Extra Data (Virtual Nodes for Fan View) ---
     // These are not in the main tree but needed for the "Me-centric" view
     const extraNodes = [
+        // Mother's Side
         { id: "m1", name: "Mother", age: 48, gender: "Female", location: "Mumbai, India", photo: "https://ui-avatars.com/api/?name=Mother&background=FF69B4&color=fff", relation: "Mother" },
         { id: "mg1", name: "Grandmother", age: 75, gender: "Female", location: "Mumbai, India", photo: "https://ui-avatars.com/api/?name=Grand+Mother&background=random", relation: "Maternal Grandmother" },
-        { id: "bil1", name: "Brother-in-Law", age: 24, gender: "Male", location: "Dubai, UAE", photo: "https://ui-avatars.com/api/?name=Bro+In+Law&background=random", relation: "Brother-in-Law" }
+        { id: "mgf1", name: "Grandfather", age: 80, gender: "Male", location: "Mumbai, India", photo: "https://ui-avatars.com/api/?name=Grand+Father&background=random", relation: "Maternal Grandfather" },
+        { id: "mu1", name: "Mat Uncle", age: 50, gender: "Male", location: "Pune, India", photo: "https://ui-avatars.com/api/?name=Maternal+Uncle&background=random", relation: "Maternal Uncle" },
+        { id: "ma1", name: "Mat Aunt", age: 45, gender: "Female", location: "Delhi, India", photo: "https://ui-avatars.com/api/?name=Maternal+Aunt&background=FF69B4&color=fff", relation: "Maternal Aunt" },
+        // Cousins from Mother's side
+        { id: "mc1", name: "Mat Cousin", age: 20, gender: "Male", location: "Pune, India", photo: "https://ui-avatars.com/api/?name=Mat+Cousin&background=random", relation: "Cousin" },
+        // Uneven Additions (Ring 3)
+        { id: "mc2", name: "Mat Cousin 2", age: 18, gender: "Female", location: "Delhi, India", photo: "https://ui-avatars.com/api/?name=Mat+Cousin+2&background=random", relation: "Cousin" },
+        { id: "mu_wife", name: "Mat Aunt In Law", age: 45, gender: "Female", location: "Pune, India", photo: "https://ui-avatars.com/api/?name=Aunt+Law&background=random", relation: "Aunt-in-Law" },
+
+        // Brother's Side
+        { id: "sil1", name: "Sister-in-Law", age: 22, gender: "Female", location: "London, UK", photo: "https://ui-avatars.com/api/?name=Sis+In+Law&background=FF69B4&color=fff", relation: "Sister-in-Law" },
+        { id: "nep1", name: "Nephew", age: 2, gender: "Male", location: "London, UK", photo: "https://ui-avatars.com/api/?name=Nephew&background=random", relation: "Nephew" },
+        // Uneven (Ring 3)
+        { id: "sil_dad", name: "Sarah's Dad", age: 55, gender: "Male", location: "London, UK", photo: "https://ui-avatars.com/api/?name=Sarah+Dad&background=random", relation: "In-Law" },
+
+        // Sister's Side
+        { id: "bil1", name: "Brother-in-Law", age: 24, gender: "Male", location: "London, UK", photo: "https://ui-avatars.com/api/?name=Bro+In+Law&background=random", relation: "Brother-in-Law" },
+        { id: "nie1", name: "Niece", age: 1, gender: "Female", location: "Dubai, UAE", photo: "https://ui-avatars.com/api/?name=Niece&background=FF69B4&color=fff", relation: "Niece" },
+        // Uneven (Ring 3)
+        { id: "bil_mom", name: "John's Mom", age: 50, gender: "Female", location: "Dubai, UAE", photo: "https://ui-avatars.com/api/?name=John+Mom&background=random", relation: "In-Law" },
+        { id: "bil_bro", name: "John's Bro", age: 20, gender: "Male", location: "Dubai, UAE", photo: "https://ui-avatars.com/api/?name=John+Bro&background=random", relation: "In-Law" },
+
+        // Father's Side Uneven
+        { id: "gr_uncle", name: "Great Uncle", age: 80, gender: "Male", location: "Village", photo: "https://ui-avatars.com/api/?name=Great+Uncle&background=random", relation: "Great Uncle" }
     ];
 
     // --- 2. Build Graph (Adjacency List) ---
@@ -739,21 +768,53 @@ function initFan() {
     // Find "Me"
     const meNode = mainRoot.descendants().find(d => d.data.name === "Me")?.data;
     const fatherNode = mainRoot.descendants().find(d => d.data.name === "Father")?.data;
+    const brotherNode = mainRoot.descendants().find(d => d.data.name === "Brother")?.data;
     const sisterNode = mainRoot.descendants().find(d => d.data.name === "Sister")?.data;
+    // Grandfather linked to Great Uncle
+    const grandFatherNode = mainRoot.descendants().find(d => d.data.name === "Grandfather")?.data;
+
 
     if (meNode) {
         // Me <-> Mother
         addEdge(meNode.id, "m1"); // Mother
     }
 
-    // Mother <-> Grandmother
-    addEdge("m1", "mg1");
-
+    // Mother Setup
     // Mother <-> Father (Spouses)
     if (fatherNode) addEdge("m1", fatherNode.id);
+    // Mother <-> Parents (Maternal Grandparents)
+    addEdge("m1", "mg1");
+    addEdge("m1", "mgf1");
+    // Mother <-> Siblings (Maternal Uncle/Aunt)
+    addEdge("m1", "mu1");
+    addEdge("m1", "ma1");
+    // Maternal Uncle <-> Mat Cousin
+    addEdge("mu1", "mc1");
+    addEdge("mu1", "mu_wife"); // Wife
+    // Maternal Aunt <-> Mat Cousin 2
+    addEdge("ma1", "mc2");
+
+
+    // Brother Link
+    if (brotherNode) {
+        addEdge(brotherNode.id, "sil1"); // Wife
+        addEdge(brotherNode.id, "nep1"); // Child
+        addEdge("sil1", "sil_dad"); // Wife's Dad (Ring 3)
+    }
 
     // Sister <-> Brother-in-Law
-    if (sisterNode) addEdge(sisterNode.id, "bil1");
+    if (sisterNode) {
+        addEdge(sisterNode.id, "bil1"); // Husband
+        addEdge(sisterNode.id, "nie1"); // Child
+        addEdge("bil1", "bil_mom"); // Husband's Mom (Ring 3)
+        addEdge("bil1", "bil_bro"); // Husband's Brother (Ring 3)
+    }
+
+    // Father Side
+    if (grandFatherNode) {
+        addEdge(grandFatherNode.id, "gr_uncle"); // Sibling
+    }
+
 
 
     // --- 3. BFS to Build Hierarchy from "Me" ---
@@ -800,13 +861,40 @@ function initFan() {
     // Color Scale based on Distance
     const colorScale = d3.interpolateRainbow; // or custom
 
+    // Color Setup: Exact Palettes from Image (Inner -> Middle -> Outer)
+    const palettes = [
+        ["#fcfbdc", "#e3f0af", "#a5d296"], // Yellow-Green
+        ["#e3f9f3", "#98e6d6", "#45cbb6"], // Teal/Cyan
+        ["#e0f2fe", "#9ad7fe", "#4fc3f7"], // Light Blue
+        ["#f0f4ff", "#c7d2fe", "#818cf8"], // Periwinkle/Blue
+        ["#f5f3ff", "#ddd6fe", "#a78bfa"], // Purple
+        ["#fdf2f8", "#fbcfe8", "#f472b6"], // Pink
+        ["#fff1f2", "#fecdd3", "#fb7185"], // Red/Salmon
+        ["#fff7ed", "#fed7aa", "#fb923c"], // Orange
+    ];
+
     fanRoot.each(d => {
-        // d.depth here corresponds to BFS distance
-        // 0 = Me, 1 = Parents/Sibs, 2 = Grandparents/In-laws
-        if (d.depth === 0) d.color = "#FFD700"; // Gold for Me
-        else if (d.depth === 1) d.color = "#84fab0"; // Light Green
-        else if (d.depth === 2) d.color = "#8fd3f4"; // Light Blue
-        else d.color = "#a18cd1"; // Purple
+        if (d.depth === 0) {
+            d.color = "#ffffff"; // Me is White
+            return;
+        }
+
+        // Determine Branch
+        let ancestor = d;
+        while (ancestor.depth > 1) {
+            ancestor = ancestor.parent;
+        }
+
+        // Branch Index
+        const branchIndex = fanRoot.children.indexOf(ancestor);
+        const palette = palettes[branchIndex % palettes.length];
+
+        // Assign Color based on Depth
+        // Depth 1 -> Index 0
+        // Depth 2 -> Index 1
+        // Depth 3+ -> Index 2 (or cycle if more depth)
+        const colorIndex = Math.min(d.depth - 1, 2);
+        d.color = palette[colorIndex];
     });
 
     // Custom Partition/Fan Layout
@@ -915,7 +1003,35 @@ function initFan() {
             const deg = midAngle * 180 / Math.PI;
 
             // 1. Me Node: Center and Horizontal
-            if (d.depth === 0) return `translate(${centroid}) rotate(0)`;
+            if (d.depth === 0) {
+                // Add Image for Me if not present
+                const g = d3.select(this.parentNode);
+                if (g.select(".me-image").empty()) {
+                    // Create Clip ID
+                    const clipId = "clip-me-fan";
+
+                    // Append ClipPath if not exists
+                    if (g.select("#" + clipId).empty()) {
+                        g.append("clipPath")
+                            .attr("id", clipId)
+                            .append("circle")
+                            .attr("r", d.y1 - 2);
+                    }
+
+                    // Insert Image BEFORE the text (this)
+                    g.insert("image", "text")
+                        .attr("class", "me-image")
+                        .attr("xlink:href", d.data.photo)
+                        .attr("x", -d.y1)
+                        .attr("y", -d.y1)
+                        .attr("width", d.y1 * 2)
+                        .attr("height", d.y1 * 2)
+                        .attr("clip-path", `url(#${clipId})`)
+                        .style("pointer-events", "none");
+                }
+                // FORCE Center for full circle (centroid returns bottom point for 0-2PI)
+                return `translate(0,0) rotate(0)`;
+            }
 
             // 2. Inner Ring (Depth 1): Tangential (Along the Curve)
             if (d.depth === 1) {
