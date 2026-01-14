@@ -875,7 +875,7 @@ function initFan() {
 
     fanRoot.each(d => {
         if (d.depth === 0) {
-            d.color = "#ffffff"; // Me is White
+            d.color = "#fefceb"; // Me is Off-White
             return;
         }
 
@@ -898,12 +898,61 @@ function initFan() {
     });
 
     // Custom Partition/Fan Layout
-    const layerDepth = radius / (fanRoot.height + 1);
+
+    // 1. Calculate dynamic thickness per ring based on content
+    const ringThickness = {};
+    const CHAR_WIDTH = 6.5; // Approx px per char
+    const BASE_DEPTH = radius / (fanRoot.height + 1); // Distribute equally by default
+
+    // Initialize with Base Depth
+    for (let i = 0; i <= fanRoot.height; i++) {
+        ringThickness[i] = BASE_DEPTH;
+    }
+
+    fanRoot.each(d => {
+        const depth = d.depth;
+        let required = BASE_DEPTH;
+
+        if (depth === 0) {
+            // Me Node: Keep base or ensure min size
+            required = Math.max(BASE_DEPTH, 60);
+        } else if (depth === 1) {
+            // Inner Ring: Tangential text, stacked lines. 
+            // Needs height for ~3 lines of text.
+            required = Math.max(BASE_DEPTH, 75);
+        } else {
+            // Outer Rings: Radial text. Length matters!
+            const nameLen = (d.data.name.length) * CHAR_WIDTH;
+            // Relation usually adds ~20-30px if brief, or more. 
+            // Let's add padding + relation estimate
+            const relLen = (d.data.relation?.length || 0) * CHAR_WIDTH * 0.7; // smaller font
+            // Total radial length required
+            required = Math.max(nameLen, relLen) + 30; // 30px padding
+        }
+
+        // Update max required for this ring
+        if (required > ringThickness[depth]) {
+            ringThickness[depth] = required;
+        }
+    });
+
+    // 2. Determine Start Radius for each depth
+    const depthStartRadius = [0];
+    let currentR = 0;
+    for (let i = 0; i <= fanRoot.height; i++) {
+        depthStartRadius[i] = currentR;
+        currentR += ringThickness[i];
+    }
+
+    // NOTE: currentR is the new Total Radius. It might exceed 'radius'.
+    // That is acceptable to avoid overflow.
 
     fanRoot.x0 = 0;
     fanRoot.x1 = 2 * Math.PI;
+
+    // Set Root Geometry
     fanRoot.y0 = 0;
-    fanRoot.y1 = layerDepth; // Center radius
+    fanRoot.y1 = ringThickness[0] - 5;
 
     // Partition logic manual override for concentric rings
     fanRoot.eachBefore(d => {
@@ -916,16 +965,15 @@ function initFan() {
                 child.x0 = d.x0 + i * step;
                 child.x1 = d.x0 + (i + 1) * step;
 
-                // Radius: Strictly based on depth
-                child.y0 = (d.depth + 1) * layerDepth + 5;
-                child.y1 = child.y0 + layerDepth - 5;
+                // Radius: Dynamic based on calculated array
+                const rStart = depthStartRadius[child.depth];
+                const rThick = ringThickness[child.depth];
+
+                child.y0 = rStart + 5;
+                child.y1 = rStart + rThick - 5;
             });
         }
     });
-
-    // Override Root geometry to be a full circle
-    fanRoot.y0 = 0;
-    fanRoot.y1 = layerDepth - 5;
 
     const arc = d3.arc()
         .startAngle(d => d.x0)
@@ -935,169 +983,140 @@ function initFan() {
         .padAngle(0.02)
         .cornerRadius(5);
 
-    // --- 3D Scene Setup ---
+    // --- 3D Scene Setup (Stacked Layers) ---
     const scene = svg.append("g")
         .attr("transform", `translate(${width / 2}, ${height / 2})`);
 
-    // Define Drop Shadow Filter
-    const defs = svg.append("defs");
-    const filter = defs.append("filter")
-        .attr("id", "block-shadow")
-        .attr("height", "150%");
+    // 1. Tilt Container: Scale Y to simulate perspective tilt
+    // This creates the "Angle" the user requested without changing the global camera
+    const TILT_SCALE = 1;
+    const fanGroup = scene.append("g")
+        .attr("class", "fan-3d-container")
+        .attr("transform", `scale(1, ${TILT_SCALE})`);
 
-    filter.append("feGaussianBlur")
-        .attr("in", "SourceAlpha")
-        .attr("stdDeviation", 4)
-        .attr("result", "blur");
+    // 2. Render Layers (Bottom to Top) for Thickness
+    const NUM_LAYERS = 8;
+    const LAYER_OFFSET = 2; // Pixels per layer (total depth = 16px)
 
-    filter.append("feOffset")
-        .attr("in", "blur")
-        .attr("dx", 3)
-        .attr("dy", 3)
-        .attr("result", "offsetBlur");
+    // Helper: Darken color for sides
+    const darken = (c, factor) => d3.color(c).darker(factor).hex();
 
-    filter.append("feFlood")
-        .attr("flood-color", "rgba(0,0,0,0.6)")
-        .attr("result", "color");
+    for (let i = 0; i < NUM_LAYERS; i++) {
+        const isTop = i === NUM_LAYERS - 1;
+        // Stack downwards: Bottom layer is at y + offset
+        const yOffset = (NUM_LAYERS - 1 - i) * LAYER_OFFSET;
 
-    filter.append("feComposite")
-        .attr("in", "color")
-        .attr("in2", "offsetBlur")
-        .attr("operator", "in")
-        .attr("result", "shadow");
+        const layer = fanGroup.append("g")
+            .attr("transform", `translate(0, ${yOffset})`);
 
-    filter.append("feMerge")
-        .append("feMergeNode").attr("in", "shadow");
-    filter.select("feMerge").append("feMergeNode").attr("in", "SourceGraphic");
+        const paths = layer.selectAll(".fan-segment")
+            .data(fanRoot.descendants())
+            .enter().append("path")
+            .attr("class", "fan-segment")
+            .attr("d", arc)
+            .style("fill", d => {
+                return isTop ? d.color : darken(d.color, 0.5 + (NUM_LAYERS - i) * 0.1);
+            })
+            .style("stroke", d => isTop ? "#333" : "none")
+            .style("stroke-width", "0.5px");
 
-    // Draw
-    const pathGroup = scene.selectAll(".fan-segment")
+        if (isTop) {
+            paths.style("cursor", "pointer")
+                .on("click", (event, d) => {
+                    event.stopPropagation();
+                    showModal(d);
+                })
+                .on("mouseover", function () {
+                    d3.select(this).style("filter", "brightness(1.1)");
+                })
+                .on("mouseout", function () {
+                    d3.select(this).style("filter", null);
+                });
+        }
+    }
+
+    // 3. Labels (On Top Layer)
+    // Labels sit on top (offset 0)
+    const labelGroup = fanGroup.append("g")
+        .attr("class", "fan-labels")
+        .attr("transform", `translate(0, 0)`);
+
+    const labels = labelGroup.selectAll(".fan-label")
         .data(fanRoot.descendants())
         .enter().append("g")
-        .attr("class", "fan-segment")
-        .style("cursor", "pointer")
-        .on("click", (event, d) => {
-            event.stopPropagation();
-            showModal(d);
-        });
-
-    pathGroup.append("path")
-
-        .attr("d", arc)
-        .style("fill", d => d.color)
-        .style("stroke", "#333")
-        .style("stroke-width", "1px")
-        .style("filter", "url(#block-shadow)") // Restore Shadow
-        .on("mouseover", function (event, d) {
-            d3.select(this).style("transform", "scale(1.02)");
-        })
-        .on("mouseout", function (event, d) {
-            d3.select(this).style("transform", "scale(1)");
-        });
-
-    // Labels
-    pathGroup.append("text")
+        .attr("class", "fan-label")
         .attr("transform", d => {
             const centroid = arc.centroid(d);
             const midAngle = (d.x0 + d.x1) / 2;
             const deg = midAngle * 180 / Math.PI;
 
-            // 1. Me Node: Center and Horizontal
-            if (d.depth === 0) {
-                // Add Image for Me if not present
-                const g = d3.select(this.parentNode);
-                if (g.select(".me-image").empty()) {
-                    // Create Clip ID
-                    const clipId = "clip-me-fan";
+            // 1. Me Node: Center
+            if (d.depth === 0) return `translate(0,0)`;
 
-                    // Append ClipPath if not exists
-                    if (g.select("#" + clipId).empty()) {
-                        g.append("clipPath")
-                            .attr("id", clipId)
-                            .append("circle")
-                            .attr("r", d.y1 - 2);
-                    }
-
-                    // Insert Image BEFORE the text (this)
-                    g.insert("image", "text")
-                        .attr("class", "me-image")
-                        .attr("xlink:href", d.data.photo)
-                        .attr("x", -d.y1)
-                        .attr("y", -d.y1)
-                        .attr("width", d.y1 * 2)
-                        .attr("height", d.y1 * 2)
-                        .attr("clip-path", `url(#${clipId})`)
-                        .style("pointer-events", "none");
-                }
-                // FORCE Center for full circle (centroid returns bottom point for 0-2PI)
-                return `translate(0,0) rotate(0)`;
-            }
-
-            // 2. Inner Ring (Depth 1): Tangential (Along the Curve)
+            // 2. Others: Rotate to align with slice
+            let rotate = 0;
             if (d.depth === 1) {
-                // Flip text on left side for readability
-                const rotate = (deg > 90 && deg < 270) ? deg + 180 : deg;
-                return `translate(${centroid}) rotate(${rotate})`;
+                // Tangential
+                rotate = (deg > 90 && deg < 270) ? deg + 180 : deg;
+            } else {
+                // Radial
+                rotate = (deg < 180) ? (deg - 90) : (deg + 90);
             }
-
-            // 3. Outer Rings (Depth >= 2): Radial (Perpendicular to Center)
-            // This fits better for thin wedges in outer layers
-            const rotate = (deg < 180) ? (deg - 90) : (deg + 90);
             return `translate(${centroid}) rotate(${rotate})`;
         })
-        .attr("text-anchor", "middle")
-        .style("font-size", "10px")
-        .style("fill", "#000")
-        .style("pointer-events", "none")
-        .each(function (d) {
-            const el = d3.select(this);
-            // Relation (Always at bottom)
-            const relationText = d.data.relation;
+        .style("pointer-events", "none");
 
-            // Name Logic
-            const name = d.data.name;
+    labels.each(function (d) {
+        const el = d3.select(this);
+
+        // Me Node (Text Mode)
+        if (d.depth === 0) {
+            el.attr("text-anchor", "middle")
+                .style("font-family", "sans-serif")
+                .style("fill", "#333") // Dark text for contrast
+                .style("pointer-events", "none");
+
+            el.append("text")
+                .text("Me")
+                .attr("y", 5)
+                .style("font-size", "14px") // Controlled small size
+                .style("font-weight", "bold");
+            return;
+        }
+
+        // Text
+        const relationText = d.data.relation;
+        const name = d.data.name;
+
+        el.attr("text-anchor", "middle")
+            .style("font-family", "sans-serif")
+            .style("fill", "#000");
+
+        // Name
+        el.append("text")
+            .text(name)
+            .attr("y", -5)
+            .style("font-size", d.depth === 1 ? "12px" : "10px")
+            .style("font-weight", "bold");
+
+        // Relation
+        if (d.depth === 1) {
+            el.select("text").attr("y", -8);
+            el.append("text").text(relationText)
+                .attr("y", 8)
+                .style("font-size", "9px");
+        } else {
+            // Simplify text for outer rings
             const words = name.split(" ");
-
-            // If Depth 1 (Big Blocks), try to wrap lines
-            if (d.depth === 1 && words.length > 1) {
-                // Stack words
-                words.forEach((word, i) => {
-                    el.append("tspan")
-                        .text(word)
-                        .attr("x", 0)
-                        .attr("dy", i === 0 ? "-0.2em" : "1.1em") // Stack vertically
-                        .style("font-weight", "bold");
-                });
-
-                // Add relation below the last word
-                el.append("tspan")
-                    .text(relationText)
-                    .attr("x", 0)
-                    .attr("dy", "1.2em")
-                    .style("font-size", "8px")
-                    .style("fill", "#444");
-            } else {
-                // Standard Single Line (Depth 0 or Depth >= 2 or Single Word)
-                const isOuter = d.depth >= 2;
-
-                // Name
-                el.append("tspan")
-                    .text(d.depth >= 2 && name.length > 10 ? name.substring(0, 9) + ".." : name)
-                    .attr("x", 0)
-                    .attr("dy", d.depth === 0 ? "0.35em" : "-0.2em")
-                    .style("font-weight", "bold");
-
-                // Relation
-                if (d.depth !== 0) {
-                    el.append("tspan")
-                        .text(isOuter && relationText.length > 10 ? relationText.substring(0, 9) + ".." : relationText)
-                        .attr("x", 0)
-                        .attr("dy", "1.2em")
-                        .style("font-size", "8px")
-                        .style("fill", "#444");
-                }
+            if (!d.children && words.length > 1) {
+                // Try to split if leaf node? Or just keep simple.
             }
-        });
+            el.append("text").text(relationText)
+                .attr("y", 7)
+                .style("font-size", "8px")
+                .style("fill", "#444");
+        }
+    });
 
     // Zoom Logic
     const zoom = d3.zoom()
@@ -1108,10 +1127,6 @@ function initFan() {
 
     svg.call(zoom)
         .call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
-
-
-
-
 }
 
 // --- 5. Isometric 3D Logic ---
