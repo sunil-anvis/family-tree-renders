@@ -1192,6 +1192,18 @@ function init3DTree() {
         .attr("stroke-width", 1)
         .attr("stroke-opacity", 0.5);
 
+    // Glass Shine Gradient
+    const glassGradient = defs.append("linearGradient")
+        .attr("id", "glass-shine")
+        .attr("x1", "0%")
+        .attr("y1", "0%")
+        .attr("x2", "100%")
+        .attr("y2", "100%");
+
+    glassGradient.append("stop").attr("offset", "0%").attr("stop-color", "white").attr("stop-opacity", 0.6);
+    glassGradient.append("stop").attr("offset", "50%").attr("stop-color", "white").attr("stop-opacity", 0.1);
+    glassGradient.append("stop").attr("offset", "100%").attr("stop-color", "white").attr("stop-opacity", 0.4);
+
     svg.append("rect")
         .attr("width", "100%")
         .attr("height", "100%")
@@ -1390,16 +1402,33 @@ function init3DTree() {
 
     // Avatar "Token"
     const avatarSize = 50;
-    const tokenThick = 6;
+    const tokenThick = 20; // Thicker glass slab
 
     // Matrix for "Floor Projection" match toIso
     const isoMatrix = "matrix(1, 0.5, -1, 0.5, 0, 0)";
+    const isoMatrixx = "matrix(1, 0.5, -1, 0.9, 0, 0)";
+
+    // Custom helper matching the user's "isoMatrixx" (1, 0.5, -1, 0.9)
+    // x' = 1*x + (-1)*y  => x - y
+    // y' = 0.5*x + 0.9*y
+    const toUserIso = (x, y) => {
+        const isoX = x - y;
+        const isoY = 0.5 * x + 0.9 * y;
+        return [isoX, isoY];
+    };
 
     const tokenGroup = avatarGroup.append("g")
         .classed("heartbeat", d => d.data.isMe)
-        .attr("transform", "translate(20, -10)"); // Centered on platform (Logical Y -20)
+        .attr("transform", "translate(20, -10)"); // Centered on platform
 
-    const tc = getBlockCorners(avatarSize, avatarSize);
+    // Calculate Corners using the CUSTOM projection so sides align with top
+    // Use avatarSize + 4 to match the white border width, preventing gaps
+    const w = avatarSize + 4, h = avatarSize + 4;
+    const c1 = toUserIso(-w / 2, -h / 2);
+    const c2 = toUserIso(w / 2, -h / 2);
+    const c3 = toUserIso(w / 2, h / 2);
+    const c4 = toUserIso(-w / 2, h / 2);
+    const tc = { c1, c2, c3, c4 };
 
     // Token Shadows (Individual)
     // Dark Contact Shadow (Tight)
@@ -1415,12 +1444,12 @@ function init3DTree() {
     // Left Face (c4 -> c3)
     tokenGroup.append("path")
         .attr("d", `M ${tc.c4[0]},${tc.c4[1]} L ${tc.c3[0]},${tc.c3[1]} L ${tc.c3[0]},${tc.c3[1] + tokenThick} L ${tc.c4[0]},${tc.c4[1] + tokenThick} Z`)
-        .attr("fill", "#999");
+        .attr("fill", d => d.data.isMe ? "#e6c200" : "#d0d0d0"); // Gold/Grey (Darker side)
 
     // Right Face (c3 -> c2)
     tokenGroup.append("path")
         .attr("d", `M ${tc.c3[0]},${tc.c3[1]} L ${tc.c2[0]},${tc.c2[1]} L ${tc.c2[0]},${tc.c2[1] + tokenThick} L ${tc.c3[0]},${tc.c3[1] + tokenThick} Z`)
-        .attr("fill", "#777");
+        .attr("fill", d => d.data.isMe ? "#ccac00" : "#b0b0b0"); // Gold/Grey (Even darker side)
 
     // 2. Token Top (Diamond) - White Border
     tokenGroup.append("rect")
@@ -1431,7 +1460,7 @@ function init3DTree() {
         .attr("fill", "#fff")
         .attr("stroke", d => d.data.isMe ? "#FFD700" : "#ccc")
         .attr("stroke-width", d => d.data.isMe ? 4 : 1)
-        .attr("transform", isoMatrix);
+        .attr("transform", isoMatrixx);
 
     // 3. Image (Projected)
     const clipId = d => `iso-clip-${d.data.id}`;
@@ -1443,7 +1472,7 @@ function init3DTree() {
         .attr("y", -avatarSize / 2)
         .attr("width", avatarSize)
         .attr("height", avatarSize)
-        .attr("transform", isoMatrix);
+        .attr("transform", isoMatrixx);
 
     tokenGroup.append("image")
         .attr("xlink:href", d => d.data.photo)
@@ -1453,12 +1482,24 @@ function init3DTree() {
         .attr("height", avatarSize)
         .attr("clip-path", `url(#${clipId})`)
         .attr("preserveAspectRatio", "xMidYMid slice")
-        .attr("transform", isoMatrix);
+        .attr("transform", isoMatrixx);
+
+    // 4. Glass Overlay (On top of image)
+    tokenGroup.append("rect")
+        .attr("x", -avatarSize / 2)
+        .attr("y", -avatarSize / 2)
+        .attr("width", avatarSize)
+        .attr("height", avatarSize)
+        .attr("fill", "url(#glass-shine)")
+        .attr("stroke", "white")
+        .attr("stroke-width", 2)
+        .attr("style", "pointer-events: none;") // Let clicks pass through
+        .attr("transform", isoMatrixx);
 
     // Name - Below Avatar (Projected on Floor)
     block.append("text")
         .attr("x", 0)
-        .attr("y", 30) // Adjusted up (-20)
+        .attr("y", 50) // Increased spacing from 30 to 50
         .text(d => d.data.name)
         .style("font-size", "14px")
         .style("font-weight", "bold")
@@ -1470,7 +1511,7 @@ function init3DTree() {
     // Date/Gen
     block.append("text")
         .attr("x", 0)
-        .attr("y", 45) // Adjusted up (-20)
+        .attr("y", 65) // Increased spacing from 45 to 65
         .text(d => d.data.relation)
         .style("font-size", "12px")
         .style("fill", "#444")
