@@ -1417,9 +1417,13 @@ function init3DTree() {
         return [isoX, isoY];
     };
 
-    const tokenGroup = avatarGroup.append("g")
-        .classed("heartbeat", d => d.data.isMe)
-        .attr("transform", "translate(20, -10)"); // Centered on platform
+    // Fix: CSS transform overrides SVG transform attribute.
+    // We need a wrapper group for positioning, and an inner group for animation.
+    const positionGroup = avatarGroup.append("g")
+        .attr("transform", "translate(20, -10)"); // Stable position
+
+    const tokenGroup = positionGroup.append("g")
+        .classed("heartbeat", d => d.data.isMe); // Animated inner group
 
     // Calculate Corners using the CUSTOM projection so sides align with top
     // Use avatarSize + 4 to match the white border width, preventing gaps
@@ -1498,7 +1502,7 @@ function init3DTree() {
 
     // Name - Below Avatar (Projected on Floor)
     block.append("text")
-        .attr("x", 0)
+        .attr("x", 20) // Aligned with icon (shifted 20)
         .attr("y", 50) // Increased spacing from 30 to 50
         .text(d => d.data.name)
         .style("font-size", "14px")
@@ -1510,7 +1514,7 @@ function init3DTree() {
 
     // Date/Gen
     block.append("text")
-        .attr("x", 0)
+        .attr("x", 20) // Aligned with icon (shifted 20)
         .attr("y", 65) // Increased spacing from 45 to 65
         .text(d => d.data.relation)
         .style("font-size", "12px")
