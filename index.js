@@ -19,7 +19,7 @@ const familyData = {
             photo: "https://ui-avatars.com/api/?name=Father&background=0D8ABC&color=fff",
             relation: "Son",
             children: [
-                { id: "c1", name: "Me", isMe: true, age: 25, gender: "Male", location: "Mumbai, India", coords: [72.9, 19.1], photo: "https://ui-avatars.com/api/?name=Me&background=random", relation: "Son" },
+                { id: "c1", name: "Me", isMe: true, age: 25, gender: "Male", location: "Mumbai, India", coords: [72.9, 19.1], photo: "https://ui-avatars.com/api/?name=Me&background=0D8ABC&color=fff", relation: "Son" },
                 { id: "c2", name: "Brother", age: 22, gender: "Male", location: "London, UK", coords: [-0.1276, 51.5074], photo: "https://ui-avatars.com/api/?name=Brother&background=random", relation: "Son" },
                 { id: "c3", name: "Sister", age: 19, gender: "Female", location: "Dubai, UAE", coords: [55.2708, 25.2048], photo: "https://ui-avatars.com/api/?name=Sister&background=FF69B4&color=fff", relation: "Daughter" }
             ]
@@ -1135,7 +1135,7 @@ function init3DTree() {
     svg.on(".zoom", null);
 
     // 4. Set Background for 3D View (Isometric Grids + Lighter)
-    svg.style("background", "white"); // Clean white background like the reference
+    svg.style("background", "#f4f4f5"); // Light Grey Base
 
     // Config
     const bh = 120; // Block Depth (Y-axis visual)
@@ -1195,7 +1195,8 @@ function init3DTree() {
         .attr("in", "SourceAlpha")
         .attr("stdDeviation", 6);
 
-    // Isometric Grid (Optional, faint)
+    // Isometric Grid (Optional, faint) -- REMOVED per user request for "plain" base
+    /*
     const pattern = defs.append("pattern")
         .attr("id", "iso-grid", "userSpaceOnUse")
         .attr("width", 100)
@@ -1204,7 +1205,7 @@ function init3DTree() {
     pattern.append("path")
         .attr("d", "M0,25 L50,0 L100,25 L50,50 Z")
         .attr("fill", "none")
-        .attr("stroke", "#eee")
+        .attr("stroke", "#e4e4e7") // Zinc-200 (Subtle on f4f4f5)
         .attr("stroke-width", 1);
 
     // Background Grid
@@ -1212,6 +1213,7 @@ function init3DTree() {
         .attr("width", "100%")
         .attr("height", "100%")
         .attr("fill", "url(#iso-grid)");
+    */
 
 
     const g = svg.append("g")
@@ -1366,7 +1368,7 @@ function init3DTree() {
             .attr("fill", "black")
             .attr("opacity", 0.1)
             .attr("filter", "url(#drop-shadow-blur)")
-            .attr("transform", "translate(20, 30)");
+            .attr("transform", "translate(0, 0)");
 
         // Render Block Group
         // Translate UP by extrusion so the bottom sits on 0?
@@ -1420,71 +1422,132 @@ function init3DTree() {
     });
 
     // --- Links ---
-    // Orthogonal Routing in Iso
+    // Orthogonal Routing in Iso with Rounded Corners
+    const linkPathGenerator = (d) => {
+        const s = d.source;
+        const t = d.target;
+
+        const sx = s.x, sy = s.y;
+        const tx = t.x, ty = t.y;
+        const midY = (sy + ty) * 0.5;
+
+        // Heights (Z)
+        // Connect to the SIDE of the button (mid-height of tile)
+        // Block Surface = extrusion. Tile = 10 thick. Mid = extrusion + 5.
+        const zOffset = 5;
+        const sz = getExtrusion(s.depth) + zOffset;
+        const tz = getExtrusion(t.depth) + zOffset;
+
+        // Helper to project 3D point to 2D screen
+        // using the same toIso logic but returning [x, y]
+        const project = (lx, ly, lz) => {
+            const [ix, iy] = toIso(lx, ly);
+            return [ix, iy - lz];
+        };
+
+        // Key Points in 3D Layout Space
+        // S -> C1 -> C2 -> T
+        // S: Start
+        // C1: First Turn (keep X=sx, move Y to midY)
+        // C2: Second Turn (move X to tx, keep Y at midY)
+        // T: Target
+
+        // Note on Z: We interpolate Z across the horizontal bridge (C1->C2)
+        // So C1 is at Z=sz, C2 is at Z=tz (or we can keep C2 at sz and drop later?)
+        // The previous simple line slanted Z from C1 to C2. Let's stick to that for smoothness.
+
+        const p0 = project(sx, sy, sz);       // Start
+        const p1 = project(sx, midY, sz);     // Corner 1
+        const p2 = project(tx, midY, tz);     // Corner 2
+        const p3 = project(tx, ty, tz);       // End
+
+        // Rounding Radius
+        const r = 15;
+
+        // Helper: Simple Vector Math
+        const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+        const add = (a, b) => [a[0] + b[0], a[1] + b[1]];
+        const len = (v) => Math.hypot(v[0], v[1]);
+        const scale = (v, s) => [v[0] * s, v[1] * s];
+        const norm = (v) => { const l = len(v); return l === 0 ? [0, 0] : [v[0] / l, v[1] / l]; };
+
+        // Draw Sequence:
+        // P0 -> (Approach P1) -> Q P1 -> (Depart P1) -> (Approach P2) -> Q P2 -> (Depart P2) -> P3
+
+        // Safe Radius Check for Segment P0->P1
+        // We need 'r' distance from P1 towards P0
+        const v10 = sub(p0, p1); // Vector P1->P0
+        const d10 = len(v10);
+        const r1 = Math.min(r, d10 / 2);
+
+        // Safe Radius Check for Segment P1->P2
+        const v12 = sub(p2, p1); // Vector P1->P2
+        const d12 = len(v12);
+
+        // We use same radius at P1 and P2 for the middle segment sharing
+        // Max radius is half the segment length
+        const r_mid = Math.min(r, d12 / 2);
+
+        // Safe Radius Check for Segment P2->P3
+        const v23 = sub(p3, p2); // Vector P2->P3
+        const d23 = len(v23);
+        const r2 = Math.min(r, d23 / 2);
+
+        // Actual radii to use
+        const rad1 = Math.min(r1, r_mid);
+        const rad2 = Math.min(r2, r_mid);
+
+        // Calculate Start/End points of curves
+        // Corner 1
+        const c1_start = add(p1, scale(norm(v10), rad1)); // Point on P0-P1
+        const c1_end = add(p1, scale(norm(v12), rad1)); // Point on P1-P2
+
+        // Corner 2
+        // Vector P2->P1 is -v12
+        const v21 = scale(v12, -1);
+        const c2_start = add(p2, scale(norm(v21), rad2)); // Point on P2-P1
+        const c2_end = add(p2, scale(norm(v23), rad2)); // Point on P2-P3
+
+        // Build Path
+        return `M ${p0[0]},${p0[1]}
+                L ${c1_start[0]},${c1_start[1]}
+                Q ${p1[0]},${p1[1]} ${c1_end[0]},${c1_end[1]}
+                L ${c2_start[0]},${c2_start[1]}
+                Q ${p2[0]},${p2[1]} ${c2_end[0]},${c2_end[1]}
+                L ${p3[0]},${p3[1]}`;
+    };
+
     linkLayer.selectAll(".iso-link")
         .data(root.links())
         .enter().append("path")
-        .attr("d", d => {
-            const s = d.source;
-            const t = d.target;
-
-            const sx = s.x;
-            const sy = s.y;
-            const tx = t.x;
-            const ty = t.y;
-
-            // Midpoint 'Forward'
-            const midY = (sy + ty) * 0.5; // Halfway depth
-
-            // Heights
-            // Since blocks sit on Y=0 (bottom) and rise UP by extrusion, 
-            // the Top Surface (= Link Level) is at Z = extrusion value.
-            // Wait, previous helper `p(x,y,z)` used `iy - z`.
-            // Higher Z means Higher Up on screen (Lower Y value).
-            // Block Group is `translate(0, -extrusion)`.
-            // So Top Surface is at effective Z = extrusion.
-
-            const sz = getExtrusion(s.depth); // Source Top Z
-            const tz = getExtrusion(t.depth); // Target Top Z
-
-            // Use the iso-projection with Z height manually
-            const p3 = (lx, ly, lz) => {
-                const [ix, iy] = toIso(lx, ly);
-                return `${ix},${iy - lz}`;
-            };
-
-            // 3 Points: Source -> Elbow1 (sx, midY) -> Elbow2 (tx, midY) -> Target
-            // Route: S(sz) -> E1(sz) -> E2(sz) -> E3(tz) -> T(tz) ?
-            // Let's drop at the last segment to avoid slant on the main horizontal traverse?
-            // Or slant the vertical segment?
-            // Let's do:
-            // S(sz) -> E1(sx, midY, sz) -> E2(tx, midY, tz) -> T(tz) 
-            // The segment E1->E2 traverses width AND changes height.
-
-            return `M${p3(sx, sy, sz)} 
-                    L${p3(sx, midY, sz)} 
-                    L${p3(tx, midY, tz)} 
-                    L${p3(tx, ty, tz)}`;
-        })
+        .attr("d", linkPathGenerator)
         .attr("fill", "none")
-        .attr("stroke", "#555") // Distinct Dark Grey
-        .attr("stroke-width", 2) // Thicker
+        .attr("stroke", d => {
+            // Darker shade of the target block's color
+            const targetColor = getGenColor(d.target);
+            return d3.color(targetColor).darker(1.2).hex();
+        })
+        .attr("stroke-width", 5) // Significantly thicker
         .attr("stroke-linecap", "round")
         .attr("stroke-linejoin", "round")
-        // .attr("transform", `translate(0, ${-extrusion - 2})`) // REMOVED global transform
-        .attr("transform", `translate(0, -2)`) // Just small bump to clear z-fighting
-        .attr("opacity", 0.8);
+        .attr("transform", `translate(0, 0)`) // No global shift needed if Z is correct
+        .attr("opacity", 0.9);
 
 
     // --- Avatars (Nodes) ---
-    // Standing Cards Logic
+    // Lying 3D Tiles Logic
+    // Tile Config
+    const tileW = 50; // Size of the square tile
+    const tileH = 10; // Thickness (Z-height of the button)
+    const tileR = 10; // Corner radius
+
     const nodes = avatarLayer.selectAll(".node-group")
         .data(root.descendants())
         .enter().append("g")
         .attr("transform", d => {
             const [ix, iy] = toIso(d.x, d.y);
             const z = getExtrusion(d.depth);
-            return `translate(${ix}, ${iy - z})`; // Sit on top of its specfic block
+            return `translate(${ix}, ${iy - z})`;
         })
         .style("cursor", "pointer")
         .on("click", (e, d) => { e.stopPropagation(); showModal(d); });
@@ -1492,108 +1555,159 @@ function init3DTree() {
     nodes.each(function (d) {
         const g = d3.select(this);
         const color = getGenColor(d);
-        const borderColor = d.data.isMe ? "#FFD700" : "#eee";
 
-        // 1. Standing Shadow
-        g.append("ellipse")
-            .attr("cx", 0)
-            .attr("cy", 0)
-            .attr("rx", cardWidth / 2)
-            .attr("ry", cardWidth / 4)
-            .attr("fill", "black")
-            .attr("opacity", 0.15)
-            .attr("filter", "url(#drop-shadow-blur)");
 
-        // 2. Standing Card Group
-        const card = g.append("g")
-            .attr("transform", `translate(${-cardWidth / 2}, ${-cardHeight})`);
+        // Helper for Initials
+        const getInitials = (name) => name.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
 
-        // Card Body (White)
-        card.append("rect")
-            .attr("width", cardWidth)
-            .attr("height", cardHeight)
-            .attr("rx", 6)
-            .attr("fill", "white")
-            .attr("stroke", borderColor)
+        // Helper for Avatar Color
+        const avatarColors = ["#e57373", "#f06292", "#ba68c8", "#9575cd", "#7986cb", "#64b5f6", "#4fc3f7", "#4dd0e1", "#4db6ac", "#81c784", "#aed581", "#dce775", "#fff176", "#ffd54f", "#ffb74d", "#ff8a65"];
+        const getAvatarColor = (name) => {
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return avatarColors[Math.abs(hash) % avatarColors.length];
+        };
+
+        // Scale for internal geometry
+        const scale = 0.8;
+        const localIso = (dx, dy) => [(dx - dy) * scale, (dx + dy) * 0.5 * scale];
+
+        const w = tileW;
+        // const h = tileH;
+        const r = tileR;
+
+        // Bounds relative to center
+        const l = -w / 2, right = w / 2, t = -w / 2, b = w / 2;
+
+        // Helper to project local coord (lx, ly, lz) -> 2D
+        const pLoc = (lx, ly, lz) => {
+            const [ix, iy] = localIso(lx, ly);
+            return [ix, iy - lz];
+        };
+
+        const tz = tileH;
+
+        // --- Paths ---
+        // Tangent points for Top Face
+        const t_l_t = pLoc(l, t + r, tz);
+        const t_l_b = pLoc(l, b - r, tz);
+        const t_b_l = pLoc(l + r, b, tz);
+        const t_b_r = pLoc(right - r, b, tz);
+        const t_r_b = pLoc(right, b - r, tz);
+        const t_r_t = pLoc(right, t + r, tz);
+        const t_t_r = pLoc(right - r, t, tz);
+        const t_t_l = pLoc(l + r, t, tz);
+
+        // Control Points
+        const cp_l_t = pLoc(l, t, tz);
+        const cp_l_b = pLoc(l, b, tz);
+        const cp_r_b = pLoc(right, b, tz);
+        const cp_r_t = pLoc(right, t, tz);
+
+        const topPathIdx = `M ${t_l_t} L ${t_l_b} Q ${cp_l_b} ${t_b_l} L ${t_b_r} Q ${cp_r_b} ${t_r_b} L ${t_r_t} Q ${cp_r_t} ${t_t_r} L ${t_t_l} Q ${cp_l_t} ${t_l_t} Z`;
+
+        // Side Wall (Simplified to Visible Faces)
+        // Visible faces: Bottom edge and Right edge
+        const bz = 0;
+        // Bottom Edge Points (Z=0)
+        const b_t_l_b = pLoc(l, b - r, bz);
+        const b_cp_l_b = pLoc(l, b, bz);
+        const b_t_b_l = pLoc(l + r, b, bz);
+        const b_t_b_r = pLoc(right - r, b, bz);
+        const b_cp_r_b = pLoc(right, b, bz);
+        const b_t_r_b = pLoc(right, b - r, bz);
+        const b_t_r_t = pLoc(right, t + r, bz);
+
+        // Corresponding Top Edge Points
+        // t_r_t, t_r_b, t_b_r, t_b_l, t_l_b
+
+        // Construct Loop for Side skirt
+        const sidePath = `
+            M ${t_r_t}
+            L ${t_r_b} Q ${cp_r_b} ${t_b_r}
+            L ${t_b_l} Q ${cp_l_b} ${t_l_b}
+            L ${t_l_b}
+            L ${b_t_l_b} Q ${b_cp_l_b} ${b_t_b_l}
+            L ${b_t_b_r} Q ${b_cp_r_b} ${b_t_r_b}
+            L ${b_t_r_t}
+            L ${t_r_t} Z`;
+
+        // Draw Side
+        g.append("path")
+            .attr("d", sidePath)
+            .attr("fill", d3.color(color).darker(0.8).hex())
+            .attr("stroke", "none");
+
+        // Draw Top
+        const tileColor = d.data.isMe ? "#0D8ABC" : getAvatarColor(d.data.name);
+
+        g.append("path")
+            .attr("id", `tile-path-${d.data.id}`)
+            .attr("d", topPathIdx)
+            .attr("fill", tileColor) // User Color
+            .attr("stroke", d3.color(color).darker(0.2).hex())
             .attr("stroke-width", 1);
 
-        // Header Strip (Colored)
-        // Simple Top Rect
-        card.append("rect")
-            .attr("width", cardWidth)
-            .attr("height", 35)
-            .attr("rx", 6) // Round top corners (covers bottom due to fill but...)
-            .attr("fill", color);
 
-        // Squares to cover bottom rounded corners of header
-        card.append("rect")
-            .attr("y", 25) // overlap
-            .attr("width", cardWidth)
-            .attr("height", 10)
-            .attr("fill", color);
+        // Initials (Native SVG Text)
+        // Fix Transform:
+        // 1. Center Text (0,0)
+        // 2. Apply Iso Matrix (0.8, 0.4, -0.8, 0.4)
+        // 3. Translate to Top Face (0, -tz)
+        const matrix = "0.8, 0.4, -0.8, 0.4, 0, 0";
 
-        // Photo / Initials Circle
-        const photoR = 24;
-        const photoCy = 35; // Sitting on the line
+        g.append("text")
+            .text(getInitials(d.data.name))
+            .attr("x", 0)
+            .attr("y", 0)
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "central")
+            .attr("fill", "#fff")
+            .attr("font-size", "22px")
+            .attr("font-weight", "bold")
+            .style("font-family", "sans-serif")
+            .style("pointer-events", "none")
+            .attr("transform", `translate(0, ${-tz}) matrix(${matrix})`);
 
-        // Circle Bg
-        card.append("circle")
-            .attr("cx", cardWidth / 2)
-            .attr("cy", photoCy)
-            .attr("r", photoR + 2)
-            .attr("fill", "white");
+        // Overlay for "Me" border
+        if (d.data.isMe) {
+            g.append("use")
+                .attr("xlink:href", `#tile-path-${d.data.id}`)
+                .attr("fill", "none")
+                .attr("stroke", "#FFD700")
+                .attr("stroke-width", 3);
+        }
 
-        const imgClipId = `iso-clip-${d.data.id}`;
-        card.append("clipPath")
-            .attr("id", imgClipId)
-            .append("circle")
-            .attr("cx", cardWidth / 2)
-            .attr("cy", photoCy)
-            .attr("r", photoR);
-
-        card.append("image")
-            .attr("xlink:href", d.data.photo)
-            .attr("x", cardWidth / 2 - photoR)
-            .attr("y", photoCy - photoR)
-            .attr("width", photoR * 2)
-            .attr("height", photoR * 2)
-            .attr("preserveAspectRatio", "xMidYMid slice")
-            .attr("clip-path", `url(#${imgClipId})`);
+        // --- Text on Floor ---
+        // Position at the bottom corner (visually below)
+        const textG = g.append("g")
+            .attr("transform", `translate(0, 0) matrix(${matrix}) translate(${tileW / 2 + 15}, ${tileW / 2 + 15})`);
 
         // Name
-        card.append("text")
+        textG.append("text")
             .text(d.data.name)
-            .attr("x", cardWidth / 2)
-            .attr("y", photoCy + photoR + 15) // Below photo
             .attr("text-anchor", "middle")
-            .attr("font-size", "10px")
+            .attr("fill", "#222")
+            .attr("font-size", "14px")
             .attr("font-weight", "bold")
-            .attr("fill", "#333");
+            .style("font-family", "sans-serif");
 
         // Relation
-        card.append("text")
-            .text(d.data.relation)
-            .attr("x", cardWidth / 2)
-            .attr("y", photoCy + photoR + 27)
-            .attr("text-anchor", "middle")
-            .attr("font-size", "9px")
-            .attr("fill", "#777")
-            .style("text-transform", "uppercase")
-            .style("letter-spacing", "0.5px");
-
-        // "Me" badge
-        if (d.data.isMe) {
-            card.append("circle")
-                .attr("cx", cardWidth - 10)
-                .attr("cy", 10)
-                .attr("r", 4)
-                .attr("fill", "#FFD700")
-                .attr("stroke", "white")
-                .attr("stroke-width", 1);
+        if (!d.data.isMe) {
+            textG.append("text")
+                .text(d.data.relation)
+                .attr("text-anchor", "middle")
+                .attr("y", 12)
+                .attr("fill", "#666")
+                .attr("font-size", "10px")
+                .style("font-family", "sans-serif")
+                .style("text-transform", "uppercase");
         }
-    });
 
-    // Zoom
+    });// Zoom
+
     const zoom = d3.zoom()
         .scaleExtent([0.1, 5])
         .on("zoom", (e) => g.attr("transform", e.transform));
