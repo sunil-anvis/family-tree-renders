@@ -1134,406 +1134,381 @@ function init3DTree() {
     svg.on(".drag", null);
     svg.on(".zoom", null);
 
-    // 4. Set Background for 3D View (Isometric Grids + Darker)
-    svg.style("background", "#d1d8e0");
+    // 4. Set Background for 3D View (Isometric Grids + Lighter)
+    svg.style("background", "black"); // Dark background
 
-    const bh = 160; // INCREASED DEPTH to fit text
-    const extrusion = 60; // INCREASED HEIGHT
-    const genColors = ["#FEF3C7", "#FFEDD5", "#FCE7F3", "#EDE9FE", "#DBEAFE"];
+    // Config
+    const bh = 120; // Block Depth (Y-axis visual)
+    const extrusion = 40; // Block Thickness (Z-axis)
+    const cardWidth = 80; // Avatar Card Width
+    const cardHeight = 100; // Avatar Card Height
+
+    // New Pastel Palette (Kennedy Style)
+    // Gen 0: Blue, Gen 1: Pink, Gen 2: Peach/Orange, Gen 3: Green
+    const genColors = [
+        "#A0C4FF", // Blue (Me)
+        "#FB6F92", // Deep Pink (Parents)
+        "#FFB5A7", // Peach (Grandparents)
+        "#FFD6A5", // Orange (Great-Grand)
+        "#CAFFBF", // Green
+        "#BDB2FF", // Purple
+    ];
+
     const getGenColor = (d) => genColors[d.depth % genColors.length];
+    const darken = (c, factor) => d3.color(c).darker(factor).hex();
 
-    // Add CSS Grid Pattern using defs
+    // Definitions
     const defs = svg.append("defs");
 
-    // 2. Shadow Filter (Drop Shadow)
+    // 1. Soft Contact Shadow
     const filter = defs.append("filter")
-        .attr("id", "drop-shadow")
+        .attr("id", "soft-shadow")
         .attr("x", "-50%")
         .attr("y", "-50%")
         .attr("width", "200%")
         .attr("height", "200%");
-
     filter.append("feGaussianBlur")
         .attr("in", "SourceAlpha")
-        .attr("stdDeviation", 4)
+        .attr("stdDeviation", 8)
         .attr("result", "blur");
-
     filter.append("feOffset")
-        .attr("in", "blur")
-        .attr("dx", 15) // Move Right
-        .attr("dy", -15) // Move Up (Top-Right)
+        .attr("dx", 5)
+        .attr("dy", 5)
         .attr("result", "offsetBlur");
+    filter.append("feFlood")
+        .attr("flood-color", "rgba(0,0,0,0.2)")
+        .attr("result", "color");
+    filter.append("feComposite")
+        .attr("in2", "offsetBlur")
+        .attr("operator", "in");
+    const merge = filter.append("feMerge");
+    merge.append("feMergeNode").attr("in", "SourceGraphic"); // Optional: if applying to group
+    // actually, for shadows we separate geometry, so just return the shadow
+    // Let's stick to standard Gaussian Blur for separate shadow paths
 
-    // 3. Contact Shadow Filter (Sharp)
-    const contactFilter = defs.append("filter")
-        .attr("id", "contact-shadow")
-        .attr("x", "-20%")
-        .attr("y", "-20%")
-        .attr("width", "140%")
-        .attr("height", "140%");
-
-    contactFilter.append("feGaussianBlur")
+    const shadowFilter = defs.append("filter")
+        .attr("id", "drop-shadow-blur")
+        .attr("x", "-50%")
+        .attr("y", "-50%")
+        .attr("width", "200%")
+        .attr("height", "200%");
+    shadowFilter.append("feGaussianBlur")
         .attr("in", "SourceAlpha")
-        .attr("stdDeviation", 1);
+        .attr("stdDeviation", 6);
 
-    // Isometric Grid Pattern
-    // We want diagonal lines forming diamonds
+    // Isometric Grid (Optional, faint)
     const pattern = defs.append("pattern")
-        .attr("id", "iso-grid-pattern")
-        .attr("width", 60)
-        .attr("height", 30) // 2:1 ratio for isometric
+        .attr("id", "iso-grid", "userSpaceOnUse")
+        .attr("width", 100)
+        .attr("height", 50)
         .attr("patternUnits", "userSpaceOnUse");
-
-    // Diagonal Cross
     pattern.append("path")
-        .attr("d", "M 0 15 L 30 0 L 60 15 L 30 30 Z")
+        .attr("d", "M0,25 L50,0 L100,25 L50,50 Z")
         .attr("fill", "none")
-        .attr("stroke", "white")
-        .attr("stroke-width", 1)
-        .attr("stroke-opacity", 0.5);
+        .attr("stroke", "#333") // Darker grid lines for dark bg
+        .attr("stroke-width", 1);
 
-    // Glass Shine Gradient
-    const glassGradient = defs.append("linearGradient")
-        .attr("id", "glass-shine")
-        .attr("x1", "0%")
-        .attr("y1", "0%")
-        .attr("x2", "100%")
-        .attr("y2", "100%");
-
-    glassGradient.append("stop").attr("offset", "0%").attr("stop-color", "white").attr("stop-opacity", 0.6);
-    glassGradient.append("stop").attr("offset", "50%").attr("stop-color", "white").attr("stop-opacity", 0.1);
-    glassGradient.append("stop").attr("offset", "100%").attr("stop-color", "white").attr("stop-opacity", 0.4);
-
+    // Background Grid
     svg.append("rect")
         .attr("width", "100%")
         .attr("height", "100%")
-        .attr("fill", "url(#iso-grid-pattern)");
+        .attr("fill", "url(#iso-grid)");
+
 
     const g = svg.append("g")
-        .attr("transform", `translate(${width / 2}, 100)`); // Initial offset
+        .attr("transform", `translate(${width / 2}, 150)`);
 
-    // Standard Tree Layout First
+    // Standard Tree Layout
     const treeLayout = d3.tree()
-        .nodeSize([240, 280]) // Increased Y spacing for deeper blocks
-        .separation((a, b) => a.parent == b.parent ? 1.2 : 1.5);
+        .nodeSize([250, 400]) // Increased spacing: Wider x, much deeper y for visible links
+        .separation((a, b) => a.parent == b.parent ? 1.1 : 1.3);
 
     const root = d3.hierarchy(familyData);
     treeLayout(root);
 
-    // Isometric Projection Helper
+    // Iso Projection
+    // x, y are screen coords from tree layout. 
+    // We map them: tree.x -> iso.x (spread), tree.y -> iso.y (depth)
     const toIso = (x, y) => {
-        const isoX = (x - y) * 1;
-        const isoY = (x + y) * 0.5;
-        return [isoX, isoY];
+        // Standard Isometric Projection
+        const scale = 0.8;
+        const ix = (x - y) * scale;
+        const iy = (x + y) * 0.5 * scale;
+        return [ix, iy];
     };
 
-    // Calculate Iso Coords for all nodes
+    // Pre-calculate layouts
     root.descendants().forEach(d => {
         [d.isoX, d.isoY] = toIso(d.x, d.y);
+        // Calculate dynamic width based on name
+        d.width = Math.max(140, d.data.name.length * 9 + 40);
     });
 
-    // Calculate Dynamic Widths
-    const bw = 120; // Base width
-    root.descendants().forEach(d => {
-        const nameLen = d.data.name.length;
-        d.width = Math.max(bw, nameLen * 8 + 60);
-    });
+    // --- Layers ---
+    const shadowLayer = g.append("g");
+    const linkLayer = g.append("g"); // Links BEHIND blocks
+    const blockLayer = g.append("g"); // Blocks ON TOP of links
+    const avatarLayer = g.append("g");
 
-    // --- Shared Sibling Backgrounds ---
+    // --- Blocks (Platforms) ---
+    // Group by parent to create shared platforms
     const siblingGroups = d3.group(root.descendants(), d => d.parent);
 
-    // LAYERS: Shadows -> Platforms -> Nodes
-
-    // 0. Shadows Layer
-    const shadowsLayer = g.append("g").attr("class", "iso-shadows");
-
-    // 1. Platforms (Shared Backgrounds)
-    const platformsLayer = g.append("g").attr("class", "iso-platforms");
-
-    // Helper for Block Geometry (Reused)
-    function getBlockCorners(w, h) {
-        const c1 = toIso(-w / 2, -h / 2);
-        const c2 = toIso(w / 2, -h / 2);
-        const c3 = toIso(w / 2, h / 2);
-        const c4 = toIso(-w / 2, h / 2);
+    // Helper to get corners
+    const getCorners = (cx, cy, w, h) => {
+        const c1 = toIso(cx - w / 2, cy - h / 2); // Top
+        const c2 = toIso(cx + w / 2, cy - h / 2); // Right
+        const c3 = toIso(cx + w / 2, cy + h / 2); // Bottom
+        const c4 = toIso(cx - w / 2, cy + h / 2); // Left
         return { c1, c2, c3, c4 };
-    }
-
-    // Iterate through groups and render platforms + shadows
-    siblingGroups.forEach((siblings, parent) => {
-        if (!siblings || siblings.length === 0) return;
-
-        let minX = Infinity;
-        let maxX = -Infinity;
-        const commonY = siblings[0].y;
-
-        // For coloring, we use the first sibling's data
-        const rep = siblings[0];
-
-        siblings.forEach(node => {
-            const left = node.x - node.width / 2;
-            const right = node.x + node.width / 2;
-            if (left < minX) minX = left;
-            if (right > maxX) maxX = right;
-        });
-
-        const padding = 10;
-        minX -= padding;
-        maxX += padding;
-
-        const platformWidth = maxX - minX;
-        const centerX = (minX + maxX) / 2;
-
-        const [isoCx, isoCy] = toIso(centerX, commonY);
-
-        // --- RENDER SHADOWS ---
-        // 1. Soft Drop Shadow (Broader)
-        shadowsLayer.append("path")
-            .attr("d", () => {
-                const { c1, c2, c3, c4 } = getBlockCorners(platformWidth, bh);
-                return `M ${c1[0]},${c1[1]} L ${c2[0]},${c2[1]} L ${c3[0]},${c3[1]} L ${c4[0]},${c4[1]} Z`;
-            })
-            .attr("transform", `translate(${isoCx}, ${isoCy}) scale(1.05)`) // Slightly bigger
-            .attr("fill", "black")
-            .attr("opacity", 0.3) // Visible opacity
-            .attr("filter", "url(#drop-shadow)");
-
-        // 2. Contact Shadow (Tight/Darker)
-        shadowsLayer.append("path")
-            .attr("d", () => {
-                const { c1, c2, c3, c4 } = getBlockCorners(platformWidth, bh);
-                return `M ${c1[0]},${c1[1]} L ${c2[0]},${c2[1]} L ${c3[0]},${c3[1]} L ${c4[0]},${c4[1]} Z`;
-            })
-            .attr("transform", `translate(${isoCx}, ${isoCy})`)
-            .attr("fill", "#000") // Pitch black base
-            .attr("opacity", 0.5) // High opacity
-            .attr("filter", "url(#contact-shadow)");
-
-        // --- RENDER PLATFORM ---
-
-        const platform = platformsLayer.append("g")
-            .attr("transform", `translate(${isoCx}, ${isoCy}) translate(0, ${-extrusion})`);
-
-        // Side Faces (Darker)
-        // Left Face
-        platform.append("path")
-            .attr("d", () => {
-                const { c3, c4 } = getBlockCorners(platformWidth, bh);
-                return `M ${c4[0]},${c4[1]} L ${c3[0]},${c3[1]} L ${c3[0]},${c3[1] + extrusion} L ${c4[0]},${c4[1] + extrusion} Z`;
-            })
-            .attr("fill", d3.color(getGenColor(rep)).darker(0.6).hex());
-
-        // Right Face
-        platform.append("path")
-            .attr("d", () => {
-                const { c2, c3 } = getBlockCorners(platformWidth, bh);
-                return `M ${c3[0]},${c3[1]} L ${c2[0]},${c2[1]} L ${c2[0]},${c2[1] + extrusion} L ${c3[0]},${c3[1] + extrusion} Z`;
-            })
-            .attr("fill", d3.color(getGenColor(rep)).darker(0.8).hex());
-
-        // Top Face (Lighter)
-        platform.append("path")
-            .attr("d", () => {
-                const { c1, c2, c3, c4 } = getBlockCorners(platformWidth, bh);
-                return `M ${c1[0]},${c1[1]} L ${c2[0]},${c2[1]} L ${c3[0]},${c3[1]} L ${c4[0]},${c4[1]} Z`;
-            })
-            .attr("fill", getGenColor(rep));
-    });
-
-
-    // Links (Rendered AFTER platforms to be on top)
-    g.selectAll(".iso-link")
-        .data(root.links())
-        .enter().append("path")
-        .attr("class", "iso-link")
-        .attr("d", d => {
-            // Source (Parent): Connect from Bottom Edge (Logical y + bh/2)
-            const startLogX = d.source.x;
-            const startLogY = d.source.y + bh / 2;
-
-            // Target (Child): Connect to Top Edge (Logical y - bh/2)
-            const endLogX = d.target.x;
-            const endLogY = d.target.y - bh / 2;
-
-            const [sx, sy] = toIso(startLogX, startLogY);
-            const [tx, ty] = toIso(endLogX, endLogY);
-
-            // Elbow points need to be calculated based on these new edge points
-            const midY = (startLogY + endLogY) / 2;
-            const p1 = toIso(startLogX, midY);
-            const p2 = toIso(endLogX, midY);
-
-            // Connect from the TOP of the blocks
-            // Shift up by extrusion amount
-            const z = -extrusion;
-
-            return `M${sx},${sy + z} L${p1[0]},${p1[1] + z} L${p2[0]},${p2[1] + z} L${tx},${ty + z}`;
-        })
-        .attr("fill", "none")
-        .attr("stroke", d => {
-            // "Second connection" (Gen 1 to Gen 2) -> Dark Green
-            if (d.target.depth === 2) return "#2E8B57";
-            return d3.interpolateRainbow(d.target.depth / 4);
-        })
-        .attr("stroke-width", 2)
-        .attr("stroke-linecap", "round");
-
-    // 3. Nodes (Content Only)
-    // Individual items on top of the platforms
-    const nodes = g.selectAll(".iso-node")
-        .data(root.descendants())
-        .enter().append("g")
-        .attr("class", "iso-node")
-        .style("cursor", "pointer")
-        .attr("transform", d => `translate(${d.isoX},${d.isoY})`) // Position correctly
-        .on("click", (event, d) => {
-            event.stopPropagation();
-            showModal(d);
-        });
-
-    // Content Group - Shift UP to sit on top of the platform (-extrusion)
-    const block = nodes.append("g")
-        .attr("transform", `translate(0, ${-extrusion})`);
-
-    // 1. Standing Avatar Group
-    const avatarGroup = block.append("g")
-        .attr("transform", d => `translate(0, -10)`);
-
-
-    // Avatar "Token"
-    const avatarSize = 50;
-    const tokenThick = 20; // Thicker glass slab
-
-    // Matrix for "Floor Projection" match toIso
-    const isoMatrix = "matrix(1, 0.5, -1, 0.5, 0, 0)";
-    const isoMatrixx = "matrix(1, 0.5, -1, 0.9, 0, 0)";
-
-    // Custom helper matching the user's "isoMatrixx" (1, 0.5, -1, 0.9)
-    // x' = 1*x + (-1)*y  => x - y
-    // y' = 0.5*x + 0.9*y
-    const toUserIso = (x, y) => {
-        const isoX = x - y;
-        const isoY = 0.5 * x + 0.9 * y;
-        return [isoX, isoY];
     };
 
-    // Fix: CSS transform overrides SVG transform attribute.
-    // We need a wrapper group for positioning, and an inner group for animation.
-    const positionGroup = avatarGroup.append("g")
-        .attr("transform", "translate(20, -10)"); // Stable position
+    siblingGroups.forEach((siblings, parent) => {
+        if (!siblings.length) return;
 
-    const tokenGroup = positionGroup.append("g")
-        .classed("heartbeat", d => d.data.isMe); // Animated inner group
+        // Calculate Bounds in Tree Space (Logical)
+        const allX = siblings.map(n => n.x);
+        const allY = siblings.map(n => n.y); // Should be identical
 
-    // Calculate Corners using the CUSTOM projection so sides align with top
-    // Use avatarSize + 4 to match the white border width, preventing gaps
-    const w = avatarSize + 4, h = avatarSize + 4;
-    const c1 = toUserIso(-w / 2, -h / 2);
-    const c2 = toUserIso(w / 2, -h / 2);
-    const c3 = toUserIso(w / 2, h / 2);
-    const c4 = toUserIso(-w / 2, h / 2);
-    const tc = { c1, c2, c3, c4 };
+        const minX = d3.min(allX);
+        const maxX = d3.max(allX);
+        const depthY = allY[0];
 
-    // Token Shadows (Individual)
-    // Dark Contact Shadow (Tight)
-    tokenGroup.append("ellipse")
-        .attr("cx", 0)
-        .attr("cy", 0)
-        .attr("rx", 32)
-        .attr("ry", 16)
-        .attr("fill", "black")
-        .attr("opacity", 0.4)
-        .attr("filter", "url(#contact-shadow)");
+        // Padding
+        const padX = 100; // Extra width on platform
+        const widthT = (maxX - minX) + padX * 2;
+        const depthT = 180; // Fixed depth of platform strip in logical space
 
-    // Left Face (c4 -> c3)
-    tokenGroup.append("path")
-        .attr("d", `M ${tc.c4[0]},${tc.c4[1]} L ${tc.c3[0]},${tc.c3[1]} L ${tc.c3[0]},${tc.c3[1] + tokenThick} L ${tc.c4[0]},${tc.c4[1] + tokenThick} Z`)
-        .attr("fill", d => d.data.isMe ? "#e6c200" : "#d0d0d0"); // Gold/Grey (Darker side)
+        // Center of Platform
+        const cx = (minX + maxX) / 2;
+        const cy = depthY;
 
-    // Right Face (c3 -> c2)
-    tokenGroup.append("path")
-        .attr("d", `M ${tc.c3[0]},${tc.c3[1]} L ${tc.c2[0]},${tc.c2[1]} L ${tc.c2[0]},${tc.c2[1] + tokenThick} L ${tc.c3[0]},${tc.c3[1] + tokenThick} Z`)
-        .attr("fill", d => d.data.isMe ? "#ccac00" : "#b0b0b0"); // Gold/Grey (Even darker side)
+        // Logical Corners (Top-Left, Top-Right, Bot-Right, Bot-Left)
+        // ALIGNED WITH GRID:
+        const l = cx - widthT / 2;
+        const r_edge = cx + widthT / 2;
+        const t = cy - depthT / 2; // "Far" edge
+        const b = cy + depthT / 2; // "Near" edge
 
-    // 2. Token Top (Diamond) - White Border
-    tokenGroup.append("rect")
-        .attr("x", -avatarSize / 2 - 2)
-        .attr("y", -avatarSize / 2 - 2)
-        .attr("width", avatarSize + 4)
-        .attr("height", avatarSize + 4)
-        .attr("fill", "#fff")
-        .attr("stroke", d => d.data.isMe ? "#FFD700" : "#ccc")
-        .attr("stroke-width", d => d.data.isMe ? 4 : 1)
-        .attr("transform", isoMatrixx);
+        // Path Helper
+        const p = (lx, ly, lz = 0) => {
+            const [ix, iy] = toIso(lx, ly);
+            return `${ix},${iy - lz}`; // Z goes UP (negative Y)
+        };
 
-    // 3. Image (Projected)
-    const clipId = d => `iso-clip-${d.data.id}`;
+        // Top Face Path (Sharp Rect)
+        const getTopPath = () => {
+            return `M ${p(l, t)} 
+                     L ${p(r_edge, t)} 
+                     L ${p(r_edge, b)} 
+                     L ${p(l, b)}
+                     Z`;
+        };
 
-    tokenGroup.append("clipPath")
-        .attr("id", clipId)
-        .append("rect")
-        .attr("x", -avatarSize / 2)
-        .attr("y", -avatarSize / 2)
-        .attr("width", avatarSize)
-        .attr("height", avatarSize)
-        .attr("transform", isoMatrixx);
+        const topPath = getTopPath();
 
-    tokenGroup.append("image")
-        .attr("xlink:href", d => d.data.photo)
-        .attr("x", -avatarSize / 2)
-        .attr("y", -avatarSize / 2)
-        .attr("width", avatarSize)
-        .attr("height", avatarSize)
-        .attr("clip-path", `url(#${clipId})`)
-        .attr("preserveAspectRatio", "xMidYMid slice")
-        .attr("transform", isoMatrixx);
+        // Color
+        const baseColor = getGenColor(siblings[0]);
+        // const sideColor = darken(baseColor, 0.4); // Unused now
 
-    // 4. Glass Overlay (On top of image)
-    tokenGroup.append("rect")
-        .attr("x", -avatarSize / 2)
-        .attr("y", -avatarSize / 2)
-        .attr("width", avatarSize)
-        .attr("height", avatarSize)
-        .attr("fill", "url(#glass-shine)")
-        .attr("stroke", "white")
-        .attr("stroke-width", 2)
-        .attr("style", "pointer-events: none;") // Let clicks pass through
-        .attr("transform", isoMatrixx);
+        // Render Shadow
+        shadowLayer.append("path")
+            .attr("d", topPath)
+            .attr("fill", "black")
+            .attr("opacity", 0.15)
+            .attr("filter", "url(#drop-shadow-blur)")
+            .attr("transform", "translate(15, 15)");
 
-    // Name - Below Avatar (Projected on Floor)
-    block.append("text")
-        .attr("x", 20) // Aligned with icon (shifted 20)
-        .attr("y", 50) // Increased spacing from 30 to 50
-        .text(d => d.data.name)
-        .style("font-size", "14px")
-        .style("font-weight", "bold")
-        .style("fill", "#000")
-        .style("pointer-events", "none")
-        .style("text-anchor", "middle")
-        .attr("transform", isoMatrix);
+        // Render Block Group
+        const grp = blockLayer.append("g")
+            .attr("transform", `translate(0, ${-extrusion})`);
 
-    // Date/Gen
-    block.append("text")
-        .attr("x", 20) // Aligned with icon (shifted 20)
-        .attr("y", 65) // Increased spacing from 45 to 65
-        .text(d => d.data.relation)
-        .style("font-size", "12px")
-        .style("fill", "#444")
-        .style("pointer-events", "none")
-        .style("text-anchor", "middle")
-        .attr("transform", isoMatrix);
+        // Side Wall REMOVED per user request ("remove external part")
+        // We only render the Top Face floating above the shadow.
+
+        // Top Face
+        grp.append("path")
+            .attr("d", topPath)
+            .attr("fill", baseColor)
+            .attr("stroke", "white")
+            .attr("stroke-width", 2)
+            .attr("stroke-linejoin", "round");
+
+        // Generation Label
+        const [lblX, lblY] = toIso(l, b);
+        grp.append("text")
+            .attr("x", lblX - 20)
+            .attr("y", lblY - 10)
+            .text(`Gen ${siblings[0].depth}`)
+            .attr("fill", "#999")
+            .attr("font-size", "12px")
+            .attr("font-family", "sans-serif")
+            .attr("font-weight", "bold")
+            .style("pointer-events", "none")
+            .attr("text-anchor", "end")
+            .attr("transform", `rotate(-30, ${lblX},${lblY})`);
+    });
+
+    // --- Links ---
+    // Orthogonal Routing in Iso
+    linkLayer.selectAll(".iso-link")
+        .data(root.links())
+        .enter().append("path")
+        .attr("d", d => {
+            const s = d.source;
+            const t = d.target;
+
+            const sx = s.x;
+            const sy = s.y;
+            const tx = t.x;
+            const ty = t.y;
+
+            // Midpoint 'Forward'
+            const midY = (sy + ty) * 0.5; // Halfway depth
+
+            // 3 Points: Source -> Elbow1 (sx, midY) -> Elbow2 (tx, midY) -> Target
+            // Projected
+            const [p1x, p1y] = toIso(sx, sy);
+            const [e1x, e1y] = toIso(sx, midY); // Elbow 1
+            const [e2x, e2y] = toIso(tx, midY); // Elbow 2
+            const [p2x, p2y] = toIso(tx, ty);
+
+            return `M${p1x},${p1y} L${e1x},${e1y} L${e2x},${e2y} L${p2x},${p2y}`;
+        })
+        .attr("fill", "none")
+        .attr("stroke", "white") // White Stroke
+        .attr("stroke-width", 4) // Thicker
+        // .attr("stroke-dasharray", "4,2") // Removed dashed style
+        .attr("stroke-linecap", "round")
+        .attr("stroke-linejoin", "round")
+        .attr("transform", `translate(0, ${-extrusion - 2})`) // Sit on top of blocks
+        .attr("opacity", 0.6);
 
 
-    // Zoom Behavior
+    // --- Avatars (Nodes) ---
+    // Standing Cards Logic
+    const nodes = avatarLayer.selectAll(".node-group")
+        .data(root.descendants())
+        .enter().append("g")
+        .attr("transform", d => {
+            const [ix, iy] = toIso(d.x, d.y);
+            return `translate(${ix}, ${iy - extrusion})`; // Sit on top
+        })
+        .style("cursor", "pointer")
+        .on("click", (e, d) => { e.stopPropagation(); showModal(d); });
+
+    nodes.each(function (d) {
+        const g = d3.select(this);
+        const color = getGenColor(d);
+        const borderColor = d.data.isMe ? "#FFD700" : "#eee";
+
+        // 1. Standing Shadow
+        g.append("ellipse")
+            .attr("cx", 0)
+            .attr("cy", 0)
+            .attr("rx", cardWidth / 2)
+            .attr("ry", cardWidth / 4)
+            .attr("fill", "black")
+            .attr("opacity", 0.15)
+            .attr("filter", "url(#drop-shadow-blur)");
+
+        // 2. Standing Card Group
+        const card = g.append("g")
+            .attr("transform", `translate(${-cardWidth / 2}, ${-cardHeight})`);
+
+        // Card Body (White)
+        card.append("rect")
+            .attr("width", cardWidth)
+            .attr("height", cardHeight)
+            .attr("rx", 6)
+            .attr("fill", "white")
+            .attr("stroke", borderColor)
+            .attr("stroke-width", 1);
+
+        // Header Strip (Colored)
+        // Simple Top Rect
+        card.append("rect")
+            .attr("width", cardWidth)
+            .attr("height", 35)
+            .attr("rx", 6) // Round top corners (covers bottom due to fill but...)
+            .attr("fill", color);
+
+        // Squares to cover bottom rounded corners of header
+        card.append("rect")
+            .attr("y", 25) // overlap
+            .attr("width", cardWidth)
+            .attr("height", 10)
+            .attr("fill", color);
+
+        // Photo / Initials Circle
+        const photoR = 24;
+        const photoCy = 35; // Sitting on the line
+
+        // Circle Bg
+        card.append("circle")
+            .attr("cx", cardWidth / 2)
+            .attr("cy", photoCy)
+            .attr("r", photoR + 2)
+            .attr("fill", "white");
+
+        const imgClipId = `iso-clip-${d.data.id}`;
+        card.append("clipPath")
+            .attr("id", imgClipId)
+            .append("circle")
+            .attr("cx", cardWidth / 2)
+            .attr("cy", photoCy)
+            .attr("r", photoR);
+
+        card.append("image")
+            .attr("xlink:href", d.data.photo)
+            .attr("x", cardWidth / 2 - photoR)
+            .attr("y", photoCy - photoR)
+            .attr("width", photoR * 2)
+            .attr("height", photoR * 2)
+            .attr("preserveAspectRatio", "xMidYMid slice")
+            .attr("clip-path", `url(#${imgClipId})`);
+
+        // Name
+        card.append("text")
+            .text(d.data.name)
+            .attr("x", cardWidth / 2)
+            .attr("y", photoCy + photoR + 15) // Below photo
+            .attr("text-anchor", "middle")
+            .attr("font-size", "10px")
+            .attr("font-weight", "bold")
+            .attr("fill", "#333");
+
+        // Relation
+        card.append("text")
+            .text(d.data.relation)
+            .attr("x", cardWidth / 2)
+            .attr("y", photoCy + photoR + 27)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "9px")
+            .attr("fill", "#777")
+            .style("text-transform", "uppercase")
+            .style("letter-spacing", "0.5px");
+
+        // "Me" badge
+        if (d.data.isMe) {
+            card.append("circle")
+                .attr("cx", cardWidth - 10)
+                .attr("cy", 10)
+                .attr("r", 4)
+                .attr("fill", "#FFD700")
+                .attr("stroke", "white")
+                .attr("stroke-width", 1);
+        }
+    });
+
+    // Zoom
     const zoom = d3.zoom()
         .scaleExtent([0.1, 5])
-        .on("zoom", (event) => {
-            g.attr("transform", event.transform);
-        });
-
+        .on("zoom", (e) => g.attr("transform", e.transform));
     svg.call(zoom);
-    // Center logic
-    const initialTransform = d3.zoomIdentity.translate(width / 2, 50).scale(1);
+
+    // Initial Center
+    const initialTransform = d3.zoomIdentity.translate(width / 2, 100).scale(1);
     svg.call(zoom.transform, initialTransform);
 }
 
