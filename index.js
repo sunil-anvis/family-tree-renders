@@ -1135,7 +1135,7 @@ function init3DTree() {
     svg.on(".zoom", null);
 
     // 4. Set Background for 3D View (Isometric Grids + Lighter)
-    svg.style("background", "black"); // Dark background
+    svg.style("background", "white"); // Clean white background like the reference
 
     // Config
     const bh = 120; // Block Depth (Y-axis visual)
@@ -1205,7 +1205,7 @@ function init3DTree() {
     pattern.append("path")
         .attr("d", "M0,25 L50,0 L100,25 L50,50 Z")
         .attr("fill", "none")
-        .attr("stroke", "#333") // Darker grid lines for dark bg
+        .attr("stroke", "#eee")
         .attr("stroke-width", 1);
 
     // Background Grid
@@ -1220,7 +1220,7 @@ function init3DTree() {
 
     // Standard Tree Layout
     const treeLayout = d3.tree()
-        .nodeSize([250, 400]) // Increased spacing: Wider x, much deeper y for visible links
+        .nodeSize([200, 240]) // Wider x, deeper y
         .separation((a, b) => a.parent == b.parent ? 1.1 : 1.3);
 
     const root = d3.hierarchy(familyData);
@@ -1376,9 +1376,9 @@ function init3DTree() {
             return `M${p1x},${p1y} L${e1x},${e1y} L${e2x},${e2y} L${p2x},${p2y}`;
         })
         .attr("fill", "none")
-        .attr("stroke", "white") // White Stroke
-        .attr("stroke-width", 4) // Thicker
-        // .attr("stroke-dasharray", "4,2") // Removed dashed style
+        .attr("stroke", "#666") // Neutral Grey
+        .attr("stroke-width", 1.5) // Thinner
+        .attr("stroke-dasharray", "4,2") // Dashed for less visual weight (optional, but clean)
         .attr("stroke-linecap", "round")
         .attr("stroke-linejoin", "round")
         .attr("transform", `translate(0, ${-extrusion - 2})`) // Sit on top of blocks
