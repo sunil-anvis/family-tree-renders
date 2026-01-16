@@ -1139,19 +1139,18 @@ function init3DTree() {
 
     // Config
     const bh = 120; // Block Depth (Y-axis visual)
-    const extrusion = 40; // Block Thickness (Z-axis)
+    const getExtrusion = (depth) => Math.max(10, 50 - (depth * 2)); // Dynamic Extrusion: 50 layers start, -2 per gen
     const cardWidth = 80; // Avatar Card Width
     const cardHeight = 100; // Avatar Card Height
 
-    // New Pastel Palette (Kennedy Style)
-    // Gen 0: Blue, Gen 1: Pink, Gen 2: Peach/Orange, Gen 3: Green
+    // New Pastel Palette (Kennedy Style - Soft & Bright)
     const genColors = [
-        "#A0C4FF", // Blue (Me)
-        "#FB6F92", // Deep Pink (Parents)
-        "#FFB5A7", // Peach (Grandparents)
-        "#FFD6A5", // Orange (Great-Grand)
-        "#CAFFBF", // Green
-        "#BDB2FF", // Purple
+        "#90caf9", // Blue (Me)
+        "#f48fb1", // Pink
+        "#fff59d", // Yellow
+        "#a5d6a7", // Green
+        "#ce93d8", // Purple
+        "#ffcc80", // Orange
     ];
 
     const getGenColor = (d) => genColors[d.depth % genColors.length];
@@ -1220,7 +1219,7 @@ function init3DTree() {
 
     // Standard Tree Layout
     const treeLayout = d3.tree()
-        .nodeSize([200, 240]) // Wider x, deeper y
+        .nodeSize([240, 400]) // Wider x, deeper y (Increased for link visibility)
         .separation((a, b) => a.parent == b.parent ? 1.1 : 1.3);
 
     const root = d3.hierarchy(familyData);
@@ -1246,8 +1245,8 @@ function init3DTree() {
 
     // --- Layers ---
     const shadowLayer = g.append("g");
-    const linkLayer = g.append("g"); // Links BEHIND blocks
-    const blockLayer = g.append("g"); // Blocks ON TOP of links
+    const blockLayer = g.append("g"); // Blocks
+    const linkLayer = g.append("g");  // Links ON TOP
     const avatarLayer = g.append("g");
 
     // --- Blocks (Platforms) ---
@@ -1266,84 +1265,155 @@ function init3DTree() {
     siblingGroups.forEach((siblings, parent) => {
         if (!siblings.length) return;
 
-        // Calculate Bounds in Tree Space (Logical)
+        // Calculate Bounds in Tree Space
         const allX = siblings.map(n => n.x);
-        const allY = siblings.map(n => n.y); // Should be identical
+        const allY = siblings.map(n => n.y);
 
         const minX = d3.min(allX);
         const maxX = d3.max(allX);
         const depthY = allY[0];
 
         // Padding
-        const padX = 100; // Extra width on platform
+        const padX = 100;
         const widthT = (maxX - minX) + padX * 2;
-        const depthT = 180; // Fixed depth of platform strip in logical space
+        const depthT = 180;
 
-        // Center of Platform
+        // Center
         const cx = (minX + maxX) / 2;
         const cy = depthY;
 
-        // Logical Corners (Top-Left, Top-Right, Bot-Right, Bot-Left)
-        // ALIGNED WITH GRID:
+        // Logical Corners
         const l = cx - widthT / 2;
         const r_edge = cx + widthT / 2;
-        const t = cy - depthT / 2; // "Far" edge
-        const b = cy + depthT / 2; // "Near" edge
+        const t = cy - depthT / 2;
+        const b = cy + depthT / 2;
+        const r = 20; // Corner Radius
 
         // Path Helper
+        // z is negative for distinct downward extrusion
         const p = (lx, ly, lz = 0) => {
             const [ix, iy] = toIso(lx, ly);
-            return `${ix},${iy - lz}`; // Z goes UP (negative Y)
+            return `${ix},${iy - lz}`;
         };
 
-        // Top Face Path (Sharp Rect)
-        const getTopPath = () => {
-            return `M ${p(l, t)} 
-                     L ${p(r_edge, t)} 
-                     L ${p(r_edge, b)} 
-                     L ${p(l, b)}
+        // Rounded Top Face
+        const getRoundedTopPath = (z = 0) => {
+            return `M ${p(l + r, t, z)}
+                    L ${p(r_edge - r, t, z)}
+                    Q ${p(r_edge, t, z)} ${p(r_edge, t + r, z)}
+                    L ${p(r_edge, b - r, z)}
+                    Q ${p(r_edge, b, z)} ${p(r_edge - r, b, z)}
+                    L ${p(l + r, b, z)}
+                    Q ${p(l, b, z)} ${p(l, b - r, z)}
+                    L ${p(l, t + r, z)}
+                    Q ${p(l, t, z)} ${p(l + r, t, z)}
+                    Z`;
+        };
+
+        const getSideSkirt = (currentExtrusion) => {
+            // Trace Top edge points slightly raised (overlapZ) to tuck under Top Face
+            // Increased to 4 to aggressively seal gaps
+            const overlapZ = 4;
+
+            // Start: Top Layer (with overlap), Left-Front Tangent
+            // Note: Bottom is at z = -currentExtrusion (locally). 
+            // WAIT: p(..., z) maps z to screen Y UP.
+            // If we want the block to go DOWN from the platform surface (z=0 locally), 
+            // the bottom should be a NEGATIVE z value in p()?
+            // Let's re-verify p().
+            // p = (lx, ly, lz) => iy - lz.
+            // visual Y increases downwards.
+            // To go DOWN on screen (thickness), we need HIGHER Y.
+            // So we need lz to be NEGATIVE?
+            // iy - (-val) = iy + val (Down). Correct.
+            // So bottom z is -currentExtrusion.
+
+            const bottomZ = -currentExtrusion;
+
+            return `M ${p(l, b - r, overlapZ)}
+                     L ${p(l, b - r, bottomZ)}
+                     Q ${p(l, b, bottomZ)} ${p(l + r, b, bottomZ)}
+                     L ${p(r_edge - r, b, bottomZ)}
+                     Q ${p(r_edge, b, bottomZ)} ${p(r_edge, b - r, bottomZ)}
+                     L ${p(r_edge, t + r, bottomZ)}
+                     L ${p(r_edge, t + r, overlapZ)}
+                     L ${p(r_edge, b - r, overlapZ)} // Back to Top Layer Corner
+                     Q ${p(r_edge, b, overlapZ)} ${p(r_edge - r, b, overlapZ)}
+                     L ${p(l + r, b, overlapZ)}
+                     Q ${p(l, b, overlapZ)} ${p(l, b - r, overlapZ)}
                      Z`;
         };
 
-        const topPath = getTopPath();
+        const topPath = getRoundedTopPath(0);
 
-        // Color
+        // Calculate extrusion for this generation
+        const thisExtrusion = getExtrusion(siblings[0].depth);
+        const sidePath = getSideSkirt(thisExtrusion);
+
+        // Color Logic - Corrected per user "Dark at top, Light on side"
+        // The Base Color is the VIBRANT color (Top).
+        // The Side Wall should be a LIGHTER tint of that base.
+
         const baseColor = getGenColor(siblings[0]);
-        // const sideColor = darken(baseColor, 0.4); // Unused now
+
+        const topColor = baseColor; // Top gets the rich color
+        const sideColor = d3.hsl(baseColor);
+        sideColor.l += 0.15; // Side is lighter
 
         // Render Shadow
         shadowLayer.append("path")
             .attr("d", topPath)
             .attr("fill", "black")
-            .attr("opacity", 0.15)
+            .attr("opacity", 0.1)
             .attr("filter", "url(#drop-shadow-blur)")
-            .attr("transform", "translate(15, 15)");
+            .attr("transform", "translate(20, 30)");
 
         // Render Block Group
+        // Translate UP by extrusion so the bottom sits on 0?
+        // No, visual convention: The layout (x,y) is the "Top" surface.
+        // If we want them to sit on the same ground plane...
+        // Assuming (x,y) is ground. Top is at +Extrusion.
+        // Current Code: `transform translate(0, -extrusion)`.
+        // This moves the group UP on screen.
+        // If (0,0) is origin. `translate(0, -40)` puts origin at -40 (Up).
+        // Inside group, we draw Top at 0 (local). So Top is at global -40.
+        // Bottom is at local -40. Global -40 -(-40)? No.
+        // `p(..., bottomZ)` -> `iy - (-40)` -> `iy + 40`.
+        // Group transform: `iy_new = iy_old - 40`.
+        // Point in group: `iy_final = (iy_new) + 40` = `iy_old`.
+        // So Bottom is at the original Layout Y (Ground).
+        // Top is at Layout Y - Extrusion (Air).
+
+        // So we translate by -thisExtrusion.
         const grp = blockLayer.append("g")
-            .attr("transform", `translate(0, ${-extrusion})`);
+            .attr("transform", `translate(0, ${-thisExtrusion})`);
 
-        // Side Wall REMOVED per user request ("remove external part")
-        // We only render the Top Face floating above the shadow.
+        // Side Wall (Lighter Tint)
+        grp.append("path")
+            .attr("d", sidePath)
+            .attr("fill", sideColor)
+            .attr("stroke", sideColor)
+            .attr("stroke-width", 3) // Thick stroke to seal seams
+            .attr("stroke-linejoin", "round");
 
-        // Top Face
+        // Top Face (Vibrant)
+        const borderColor = darken(baseColor, 0.5); // Darker border for the top face
         grp.append("path")
             .attr("d", topPath)
-            .attr("fill", baseColor)
-            .attr("stroke", "white")
-            .attr("stroke-width", 2)
-            .attr("stroke-linejoin", "round");
+            .attr("fill", topColor)
+            .attr("stroke", borderColor)
+            .attr("stroke-width", 2);
 
         // Generation Label
         const [lblX, lblY] = toIso(l, b);
         grp.append("text")
             .attr("x", lblX - 20)
             .attr("y", lblY - 10)
-            .text(`Gen ${siblings[0].depth}`)
-            .attr("fill", "#999")
+            .text(`Generation ${siblings[0].depth}`)
+            .attr("fill", "#888")
             .attr("font-size", "12px")
             .attr("font-family", "sans-serif")
-            .attr("font-weight", "bold")
+            .attr("font-weight", "500")
             .style("pointer-events", "none")
             .attr("text-anchor", "end")
             .attr("transform", `rotate(-30, ${lblX},${lblY})`);
@@ -1366,23 +1436,44 @@ function init3DTree() {
             // Midpoint 'Forward'
             const midY = (sy + ty) * 0.5; // Halfway depth
 
-            // 3 Points: Source -> Elbow1 (sx, midY) -> Elbow2 (tx, midY) -> Target
-            // Projected
-            const [p1x, p1y] = toIso(sx, sy);
-            const [e1x, e1y] = toIso(sx, midY); // Elbow 1
-            const [e2x, e2y] = toIso(tx, midY); // Elbow 2
-            const [p2x, p2y] = toIso(tx, ty);
+            // Heights
+            // Since blocks sit on Y=0 (bottom) and rise UP by extrusion, 
+            // the Top Surface (= Link Level) is at Z = extrusion value.
+            // Wait, previous helper `p(x,y,z)` used `iy - z`.
+            // Higher Z means Higher Up on screen (Lower Y value).
+            // Block Group is `translate(0, -extrusion)`.
+            // So Top Surface is at effective Z = extrusion.
 
-            return `M${p1x},${p1y} L${e1x},${e1y} L${e2x},${e2y} L${p2x},${p2y}`;
+            const sz = getExtrusion(s.depth); // Source Top Z
+            const tz = getExtrusion(t.depth); // Target Top Z
+
+            // Use the iso-projection with Z height manually
+            const p3 = (lx, ly, lz) => {
+                const [ix, iy] = toIso(lx, ly);
+                return `${ix},${iy - lz}`;
+            };
+
+            // 3 Points: Source -> Elbow1 (sx, midY) -> Elbow2 (tx, midY) -> Target
+            // Route: S(sz) -> E1(sz) -> E2(sz) -> E3(tz) -> T(tz) ?
+            // Let's drop at the last segment to avoid slant on the main horizontal traverse?
+            // Or slant the vertical segment?
+            // Let's do:
+            // S(sz) -> E1(sx, midY, sz) -> E2(tx, midY, tz) -> T(tz) 
+            // The segment E1->E2 traverses width AND changes height.
+
+            return `M${p3(sx, sy, sz)} 
+                    L${p3(sx, midY, sz)} 
+                    L${p3(tx, midY, tz)} 
+                    L${p3(tx, ty, tz)}`;
         })
         .attr("fill", "none")
-        .attr("stroke", "#666") // Neutral Grey
-        .attr("stroke-width", 1.5) // Thinner
-        .attr("stroke-dasharray", "4,2") // Dashed for less visual weight (optional, but clean)
+        .attr("stroke", "#555") // Distinct Dark Grey
+        .attr("stroke-width", 2) // Thicker
         .attr("stroke-linecap", "round")
         .attr("stroke-linejoin", "round")
-        .attr("transform", `translate(0, ${-extrusion - 2})`) // Sit on top of blocks
-        .attr("opacity", 0.6);
+        // .attr("transform", `translate(0, ${-extrusion - 2})`) // REMOVED global transform
+        .attr("transform", `translate(0, -2)`) // Just small bump to clear z-fighting
+        .attr("opacity", 0.8);
 
 
     // --- Avatars (Nodes) ---
@@ -1392,7 +1483,8 @@ function init3DTree() {
         .enter().append("g")
         .attr("transform", d => {
             const [ix, iy] = toIso(d.x, d.y);
-            return `translate(${ix}, ${iy - extrusion})`; // Sit on top
+            const z = getExtrusion(d.depth);
+            return `translate(${ix}, ${iy - z})`; // Sit on top of its specfic block
         })
         .style("cursor", "pointer")
         .on("click", (e, d) => { e.stopPropagation(); showModal(d); });
