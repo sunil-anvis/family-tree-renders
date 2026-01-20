@@ -17,11 +17,6 @@
         <button class="view-btn" data-view="vertical-tree">Vertical Tree</button>
         <button class="view-btn" data-view="fan">Fan View</button>
         <button class="view-btn" data-view="isometric">3D View</button>
-        <div id="fan-controls" style="display: none; margin-left: 10px; align-items: center;">
-            <input type="checkbox" id="ancestor-mode" class="form-check-input" style="margin-right: 5px;">
-            <label for="ancestor-mode"
-                style="color: white; font-family: sans-serif; font-size: 14px; cursor: pointer;">Parents Mode</label>
-        </div>
     </div>
     <div id="zoom-controls">
         <button id="zoom-in" class="btn btn-dark">+</button>
