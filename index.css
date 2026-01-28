@@ -111,6 +111,51 @@ body {
     margin: 0;
 }
 
+/* Trace Feature Styles */
+.tree-link.trace-active {
+    stroke: #FFD700 !important;
+    /* Gold */
+    stroke-width: 4px !important;
+    opacity: 1 !important;
+    filter: drop-shadow(0 0 5px #FFD700);
+    z-index: 100 !important;
+    transition: stroke-width 0.3s ease, filter 0.3s ease;
+}
+
+.tree-node.trace-active circle {
+    stroke: #FFD700 !important;
+    stroke-width: 4px !important;
+    filter: drop-shadow(0 0 8px #FFD700);
+    transition: all 0.3s ease;
+}
+
+.tree-node.trace-active .tree-card-bg {
+    stroke: #FFD700;
+    stroke-width: 2px;
+    transition: all 0.3s ease;
+}
+
+.trace-btn {
+    display: block;
+    width: 100%;
+    margin-top: 15px;
+    padding: 10px;
+    background: transparent;
+    border: 1px solid #FFD700;
+    color: #FFD700;
+    text-transform: uppercase;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 5px;
+    transition: all 0.3s ease;
+}
+
+.trace-btn:hover {
+    background: #FFD700;
+    color: #000;
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
 /* Globe Stylings */
 .geo-node circle {
     transition: r 0.2s, stroke 0.2s;

@@ -51,18 +51,137 @@ modal.on("click", (e) => {
 });
 
 function showModal(d) {
+    const isVerticalView = currentView === 'vertical-tree';
+
     modalBody.html(`
     <div class="modal-profile">
         <img src="${d.data.photo}" alt="${d.data.name}" class="modal-image">
             <h2 class="modal-name">${d.data.name}</h2>
-            <p class="modal-info">${d.data.relation} &bull; ${d.data.age} yrs &bull; ${d.data.gender}</p>
-            <p class="modal-location">&#x1F4CD; ${d.data.location}</p>
+            <p class="modal-info">${d.data.relation} &bull; ${d.data.size ? 'Family Size: ' + d.data.size : d.data.age + ' yrs'} &bull; ${d.data.gender || 'N/A'}</p>
+            <p class="modal-location">&#x1F4CD; ${d.data.location || 'Unknown'}</p>
+            ${isVerticalView ? '<button class="trace-btn" id="trace-path-btn">Trace Path from Me</button>' : ''}
         </div>
 `);
     modal.style("pointer-events", "all")
         .transition().duration(200)
         .style("opacity", 1);
+
+    // Trace Button Handler (only in vertical view)
+    if (isVerticalView) {
+        const traceBtn = document.getElementById("trace-path-btn");
+        if (traceBtn) {
+            traceBtn.addEventListener("click", () => {
+                console.log("Trace button clicked!");
+                console.log("currentTreeRoot:", currentTreeRoot);
+                console.log("Target node data:", d.data);
+
+                if (!currentTreeRoot) {
+                    console.error("currentTreeRoot is not set!");
+                    return;
+                }
+
+                // 1. Clear previous trace
+                d3.selectAll(".trace-active").classed("trace-active", false);
+
+                // 2. Find "Me" node
+                const meNode = currentTreeRoot.descendants().find(n => n.data.isMe);
+                console.log("Me node:", meNode);
+
+                // 3. Find path to current node (d)
+                const targetNode = currentTreeRoot.descendants().find(n => n.data.id === d.data.id);
+                console.log("Target node:", targetNode);
+
+                if (!meNode) {
+                    console.error("Could not find 'Me' node in tree!");
+                    return;
+                }
+
+                if (!targetNode) {
+                    console.error("Could not find target node in tree!");
+                    return;
+                }
+
+                if (meNode === targetNode) {
+                    console.log("Target is 'Me' - no path to trace");
+                    return;
+                }
+
+                // Calculate Path (Ancestry path in the *visual* tree)
+                const pathNodes = meNode.path(targetNode);
+                console.log("Path nodes:", pathNodes.map(n => n.data.name));
+
+                // Highlight Nodes
+                const nodeIds = new Set(pathNodes.map(n => n.data.id));
+                d3.selectAll(".tree-node")
+                    .filter(n => nodeIds.has(n.data.id))
+                    .classed("trace-active", true);
+
+                // Highlight Links
+                const linkPairs = new Set();
+                for (let i = 0; i < pathNodes.length - 1; i++) {
+                    const a = pathNodes[i];
+                    const b = pathNodes[i + 1];
+                    linkPairs.add(`${a.data.id}-${b.data.id}`);
+                    linkPairs.add(`${b.data.id}-${a.data.id}`);
+                }
+
+                console.log("Link pairs:", Array.from(linkPairs));
+
+                // Close modal first
+                modal.transition().duration(200)
+                    .style("opacity", 0)
+                    .on("end", () => modal.style("pointer-events", "none"));
+
+                // Animate the trace sequentially
+                // Highlight nodes one by one with delay
+                pathNodes.forEach((node, index) => {
+                    setTimeout(() => {
+                        d3.selectAll(".tree-node")
+                            .filter(n => n.data.id === node.data.id)
+                            .classed("trace-active", true)
+                            .select("circle")
+                            .transition()
+                            .duration(300)
+                            .attr("r", 25) // Pulse effect
+                            .transition()
+                            .duration(300)
+                            .attr("r", 21);
+                    }, index * 400); // 400ms delay between each node
+                });
+
+                // Animate links one by one
+                for (let i = 0; i < pathNodes.length - 1; i++) {
+                    const a = pathNodes[i];
+                    const b = pathNodes[i + 1];
+                    const linkKey = `${a.data.id}-${b.data.id}`;
+
+                    setTimeout(() => {
+                        d3.selectAll(".tree-link[data-link-type='main-tree']")
+                            .filter(function (l) {
+                                return linkPairs.has(`${l.source.data.id}-${l.target.data.id}`);
+                            })
+                            .filter(function (l) {
+                                return `${l.source.data.id}-${l.target.data.id}` === linkKey ||
+                                    `${l.target.data.id}-${l.source.data.id}` === linkKey;
+                            })
+                            .classed("trace-active", true)
+                            .transition()
+                            .duration(400)
+                            .attr("stroke-width", 6)
+                            .transition()
+                            .duration(200)
+                            .attr("stroke-width", 4);
+                    }, i * 400 + 200); // Start after the source node, offset by 200ms
+                }
+
+                console.log("Animation started - path will trace from Me to", d.data.name);
+            });
+        }
+    }
 }
+
+// Global variable to store current hierarchy root for tracing
+let currentTreeRoot = null;
 
 // State
 let currentView = 'globe'; // 'globe' or 'tree'
@@ -2340,6 +2459,7 @@ function initVerticalTreeV2() {
     }
 
     const root = d3.hierarchy(vTreeRootData);
+    currentTreeRoot = root; // Store for tracing
 
     // Calculate Max Depth to Invert Layout
     const maxDepth = d3.max(root.descendants(), d => d.depth);
@@ -2393,6 +2513,7 @@ function initVerticalTreeV2() {
         .data(root.links())
         .enter().append("path")
         .attr("class", "tree-link")
+        .attr("data-link-type", "main-tree") // Mark as main tree link for trace feature
         .attr("d", d => {
             // Visual Data Logic:
             // Standard Flow: Source (Left) -> Target (Right)
