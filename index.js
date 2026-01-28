@@ -1,215 +1,20 @@
 ﻿// --- 1. Data & Global Setup ---
-const familyData = {
-    id: "root",
-    name: "Grandfather",
-    age: 78,
-    gender: "Male",
-    location: "Mumbai, India",
-    coords: [72.8777, 19.0760],
-    photo: "https://ui-avatars.com/api/?name=Grand+Father&background=random",
-    relation: "Root",
-    spouse: {
-        name: "Grandmother",
-        age: 76,
-        gender: "Female",
-        location: "Mumbai, India",
-        photo: "https://ui-avatars.com/api/?name=Grand+Mother&background=random",
-        relation: "Paternal Grandmother"
-    },
-    children: [
-        {
-            id: "f1",
-            name: "Father",
-            spouse: {
-                id: "m1",
-                name: "Mother",
-                age: 48,
-                gender: "Female",
-                location: "Mumbai, India",
-                photo: "https://ui-avatars.com/api/?name=Mother&background=FF69B4&color=fff",
-                relation: "Mother",
-                parents: [
-                    { id: "mg1", name: "Maternal GF", age: 75, gender: "Male", photo: "https://ui-avatars.com/api/?name=Mat+GF&background=random", relation: "Grandfather" },
-                    { id: "mg2", name: "Maternal GM", age: 70, gender: "Female", photo: "https://ui-avatars.com/api/?name=Mat+GM&background=random", relation: "Grandmother" }
-                ]
-            },
-            age: 50,
-            gender: "Male",
-            location: "Mumbai, India",
-            coords: [72.8777, 19.0760],
-            photo: "https://ui-avatars.com/api/?name=Father&background=0D8ABC&color=fff",
-            relation: "Son",
-            children: [
-                { id: "c1", name: "Me", isMe: true, age: 25, gender: "Male", location: "Mumbai, India", coords: [72.9, 19.1], photo: "https://ui-avatars.com/api/?name=Me&background=0D8ABC&color=fff", relation: "Son" },
-                {
-                    id: "c2",
-                    name: "Brother",
-                    spouse: {
-                        id: "c2s",
-                        name: "Sister In Law",
-                        age: 21,
-                        gender: "Female",
-                        location: "London, UK",
-                        photo: "https://ui-avatars.com/api/?name=Sister+In+Law&background=FF69B4&color=fff",
-                        relation: "Daughter In Law"
-                    },
-                    age: 22,
-                    gender: "Male",
-                    location: "London, UK",
-                    coords: [-0.1276, 51.5074],
-                    photo: "https://ui-avatars.com/api/?name=Brother&background=random",
-                    relation: "Son",
-                    children: [
-                        { id: "n2", name: "Nephew 2", age: 1, gender: "Male", location: "London, UK", coords: [-0.1, 51.5], photo: "https://ui-avatars.com/api/?name=Nephew+two&background=random", relation: "Grandson" }
-                    ]
-                },
-                {
-                    id: "c3",
-                    name: "Sister",
-                    spouse: {
-                        id: "c3s",
-                        name: "Brother In Law",
-                        age: 20,
-                        gender: "Male",
-                        location: "Dubai, UAE",
-                        photo: "https://ui-avatars.com/api/?name=Brother+In+Law&background=random",
-                        relation: "Son In Law"
-                    },
-                    age: 19,
-                    gender: "Female",
-                    location: "Dubai, UAE",
-                    coords: [55.2708, 25.2048],
-                    photo: "https://ui-avatars.com/api/?name=Sister&background=FF69B4&color=fff",
-                    relation: "Daughter",
-                    children: [
-                        { id: "ni1", name: "Niece 1", age: 1, gender: "Female", location: "Dubai, UAE", coords: [55.3, 25.2], photo: "https://ui-avatars.com/api/?name=Niece+One&background=random", relation: "Granddaughter" }
-                    ]
-                }
-            ]
-        },
-        {
-            id: "u1",
-            name: "Uncle",
-            spouse: {
-                id: "ua1",
-                name: "Aunt (In-Law)",
-                age: 45,
-                gender: "Female",
-                location: "New York, USA",
-                photo: "https://ui-avatars.com/api/?name=Aunt+In+Law&background=FF69B4&color=fff",
-                relation: "Aunt",
-                parents: [
-                    { id: "ap1", name: "Aunt's Dad", age: 70, gender: "Male", photo: "https://ui-avatars.com/api/?name=Aunt+Dad&background=random", relation: "Father" },
-                    { id: "ap2", name: "Aunt's Mom", age: 68, gender: "Female", photo: "https://ui-avatars.com/api/?name=Aunt+Mom&background=random", relation: "Mother" }
-                ]
-            },
-            age: 48,
-            gender: "Male",
-            location: "New York, USA",
-            coords: [-74.0060, 40.7128],
-            photo: "https://ui-avatars.com/api/?name=Uncle&background=random",
-            relation: "Son",
-            children: [
-                {
-                    id: "co1",
-                    name: "Cousin 1",
-                    spouse: {
-                        id: "co1s",
-                        name: "Cousin 1 Spouse",
-                        age: 28,
-                        gender: "Male",
-                        location: "Chicago, USA",
-                        photo: "https://ui-avatars.com/api/?name=Cousin+Spouse&background=random",
-                        relation: "In-Law"
-                    },
-                    age: 26,
-                    gender: "Female",
-                    location: "Chicago, USA",
-                    coords: [-87.6298, 41.8781],
-                    photo: "https://ui-avatars.com/api/?name=Cousin+One&background=random",
-                    relation: "Daughter",
-                    children: [
-                        { id: "n1", name: "Nephew 1", age: 5, gender: "Male", location: "Chicago, USA", coords: [-87.65, 41.90], photo: "https://ui-avatars.com/api/?name=Nephew&background=random", relation: "Grandson" }
-                    ]
-                },
-                { id: "co2", name: "Cousin 2", age: 24, gender: "Male", location: "Riyadh, Saudi", coords: [46.6753, 24.7136], photo: "https://ui-avatars.com/api/?name=Cousin+Two&background=random", relation: "Son" }
-            ]
-        },
-        {
-            id: "a1",
-            name: "Aunt",
-            spouse: {
-                id: "au1",
-                name: "Uncle (In-Law)",
-                age: 48,
-                gender: "Male",
-                location: "Mumbai, India",
-                photo: "https://ui-avatars.com/api/?name=Uncle+In+Law&background=random",
-                relation: "Uncle",
-                parents: [
-                    { id: "up1", name: "Uncle's Dad", age: 72, gender: "Male", photo: "https://ui-avatars.com/api/?name=Uncle+Dad&background=random", relation: "Father" },
-                    { id: "up2", name: "Uncle's Mom", age: 70, gender: "Female", photo: "https://ui-avatars.com/api/?name=Uncle+Mom&background=random", relation: "Mother" }
-                ]
-            },
-            age: 45,
-            gender: "Female",
-            location: "Mumbai, India",
-            coords: [72.8, 19.0],
-            photo: "https://ui-avatars.com/api/?name=Aunt&background=FF69B4&color=fff",
-            relation: "Daughter",
-            children: [
-                { id: "co3", name: "Cousin 3", age: 20, gender: "Male", location: "Mumbai, India", coords: [72.85, 19.05], photo: "https://ui-avatars.com/api/?name=Cousin+Three&background=random", relation: "Son" },
-                { id: "co4", name: "Cousin 4", age: 18, gender: "Female", location: "Mumbai, India", coords: [72.82, 19.02], photo: "https://ui-avatars.com/api/?name=Cousin+Four&background=random", relation: "Daughter" }
-            ]
-        },
-        // --- Mock Data for Full Circle ---
-        {
-            id: "gu1",
-            name: "Great Aunt",
-            spouse: {
-                id: "gua1",
-                name: "Great Uncle",
-                age: 75,
-                gender: "Male",
-                location: "Delhi, India",
-                photo: "https://ui-avatars.com/api/?name=Great+Uncle&background=random",
-                relation: "Great Uncle"
-            },
-            age: 70,
-            gender: "Female",
-            location: "Delhi, India",
-            coords: [77.2090, 28.6139],
-            photo: "https://ui-avatars.com/api/?name=Great+Aunt&background=random",
-            relation: "Sister",
-            children: [
-                { id: "c5", name: "Cousin 5", age: 40, gender: "Male", location: "Pune, India", coords: [73.8567, 18.5204], photo: "https://ui-avatars.com/api/?name=Cousin+Five&background=random", relation: "Nephew" },
-                { id: "c6", name: "Cousin 6", age: 38, gender: "Female", location: "Goa, India", coords: [74.1240, 15.2993], photo: "https://ui-avatars.com/api/?name=Cousin+Six&background=random", relation: "Niece" }
-            ]
-        },
-        {
-            id: "yu1",
-            name: "Young Uncle",
-            spouse: {
-                id: "yua1",
-                name: "Young Aunt",
-                age: 38,
-                gender: "Female",
-                location: "Bangalore, India",
-                photo: "https://ui-avatars.com/api/?name=Young+Aunt&background=FF69B4&color=fff",
-                relation: "Aunt"
-            },
-            age: 42,
-            gender: "Male",
-            location: "Bangalore, India",
-            coords: [77.5946, 12.9716],
-            photo: "https://ui-avatars.com/api/?name=Young+Uncle&background=random",
-            relation: "Brother",
-            children: [
-                { id: "c7", name: "Cousin 7", age: 15, gender: "Female", location: "Bangalore, India", coords: [77.6, 12.95], photo: "https://ui-avatars.com/api/?name=Cousin+Seven&background=random", relation: "Niece" }
-            ]
-        }
-    ]
-};
+let familyData;
+
+// Initialize App
+
+
+function initApp() {
+    // Determine initial view based on active button in HTML
+    const activeBtn = document.querySelector(".view-btn.active");
+    if (activeBtn) {
+        currentView = activeBtn.dataset.view;
+    }
+
+    // Initial Render
+    switchView(currentView);
+}
+
 
 // Global Dimensions
 let width = window.innerWidth;
@@ -247,13 +52,13 @@ modal.on("click", (e) => {
 
 function showModal(d) {
     modalBody.html(`
-        <div class="modal-profile">
-            <img src="${d.data.photo}" alt="${d.data.name}" class="modal-image">
+    <div class="modal-profile">
+        <img src="${d.data.photo}" alt="${d.data.name}" class="modal-image">
             <h2 class="modal-name">${d.data.name}</h2>
             <p class="modal-info">${d.data.relation} &bull; ${d.data.age} yrs &bull; ${d.data.gender}</p>
             <p class="modal-location">&#x1F4CD; ${d.data.location}</p>
         </div>
-    `);
+`);
     modal.style("pointer-events", "all")
         .transition().duration(200)
         .style("opacity", 1);
@@ -496,7 +301,7 @@ function initGlobe() {
                     } else {
                         const coords = projection(centroid);
                         if (coords) {
-                            el.attr("transform", `translate(${coords[0]},${coords[1]})`);
+                            el.attr("transform", `translate(${coords[0]}, ${coords[1]})`);
                             // Fade out countries when zoomed in to let Cities shine?
                             // Keep them for context.
                             el.style("display", "block");
@@ -592,7 +397,7 @@ function initGlobe() {
 
         nodeElements.attr("transform", d => {
             const coords = projection(d.data.coords);
-            return coords ? `translate(${coords[0]},${coords[1]})` : "translate(0,0)";
+            return coords ? `translate(${coords[0]}, ${coords[1]})` : "translate(0,0)";
         });
 
         nodeElements.style("display", d => {
@@ -710,11 +515,11 @@ function initTree() {
                 const bracketY = s.y + 20;
 
                 // 1. Vertical Connectors from Parents to Horizontal Bar
-                const fatherLine = `M ${fatherX},${s.y} L ${fatherX},${bracketY}`;
-                const motherLine = `M ${motherX},${s.y} L ${motherX},${bracketY}`;
+                const fatherLine = `M ${fatherX},${s.y} L ${fatherX},${bracketY} `;
+                const motherLine = `M ${motherX},${s.y} L ${motherX},${bracketY} `;
 
                 // 2. Horizontal Bracket Line
-                const horizontalLine = `M ${fatherX},${bracketY} L ${motherX},${bracketY}`;
+                const horizontalLine = `M ${fatherX},${bracketY} L ${motherX},${bracketY} `;
 
                 // 3. Child Connector (From Bracket Midpoint Down)
                 const bracketMidX = (fatherX + motherX) / 2;
@@ -731,7 +536,7 @@ function initTree() {
 
                 // Path: MidBracket -> MidPoint -> Target
                 // Simple Orthogonal: V midY H t.x V t.y
-                const mainPath = `M ${bracketMidX},${bracketY} V ${midY} H ${targetX} V ${t.y}`;
+                const mainPath = `M ${bracketMidX},${bracketY} V ${midY} H ${targetX} V ${t.y} `;
 
                 // Check if Target needs Bracket (Child -> Parents)
                 if (d.target.data.spouse) {
@@ -741,15 +546,15 @@ function initTree() {
                     const tBracketY = t.y - 20;
 
                     // Lines from Bracket to Target Parents
-                    const tFatherLine = `M ${tFatherX},${tBracketY} L ${tFatherX},${t.y}`;
-                    const tMotherLine = `M ${tMotherX},${tBracketY} L ${tMotherX},${t.y}`;
-                    const tHorizLine = `M ${tFatherX},${tBracketY} L ${tMotherX},${tBracketY}`;
+                    const tFatherLine = `M ${tFatherX},${tBracketY} L ${tFatherX},${t.y} `;
+                    const tMotherLine = `M ${tMotherX},${tBracketY} L ${tMotherX},${t.y} `;
+                    const tHorizLine = `M ${tFatherX},${tBracketY} L ${tMotherX},${tBracketY} `;
 
                     // Connect Main Path to Target Bracket Center
                     const tBracketMidX = (tFatherX + tMotherX) / 2;
 
                     // Recalculate Main Path to hit tBracketMidX/tBracketY
-                    const fixedMainPath = `M ${bracketMidX},${bracketY} V ${midY} H ${tBracketMidX} V ${tBracketY}`;
+                    const fixedMainPath = `M ${bracketMidX},${bracketY} V ${midY} H ${tBracketMidX} V ${tBracketY} `;
 
                     return fatherLine + motherLine + horizontalLine + fixedMainPath + tFatherLine + tMotherLine + tHorizLine;
                 }
@@ -769,20 +574,20 @@ function initTree() {
                     const tMotherX = t.x + (cardWidth + 20);
                     const tBracketY = t.y - 20;
 
-                    const tFatherLine = `M ${tFatherX},${tBracketY} L ${tFatherX},${t.y}`;
-                    const tMotherLine = `M ${tMotherX},${tBracketY} L ${tMotherX},${t.y}`;
-                    const tHorizLine = `M ${tFatherX},${tBracketY} L ${tMotherX},${tBracketY}`;
+                    const tFatherLine = `M ${tFatherX},${tBracketY} L ${tFatherX},${t.y} `;
+                    const tMotherLine = `M ${tMotherX},${tBracketY} L ${tMotherX},${t.y} `;
+                    const tHorizLine = `M ${tFatherX},${tBracketY} L ${tMotherX},${tBracketY} `;
 
                     const tBracketMidX = (tFatherX + tMotherX) / 2;
 
                     const midY = (s.y + tBracketY) / 2;
-                    const mainPath = `M ${s.x},${s.y} V ${midY} H ${tBracketMidX} V ${tBracketY}`;
+                    const mainPath = `M ${s.x},${s.y} V ${midY} H ${tBracketMidX} V ${tBracketY} `;
 
                     return mainPath + tFatherLine + tMotherLine + tHorizLine;
                 }
 
                 const midY = (s.y + t.y) / 2;
-                return `M ${s.x},${s.y} V ${midY} H ${t.x} V ${t.y}`;
+                return `M ${s.x},${s.y} V ${midY} H ${t.x} V ${t.y} `;
             }
         })
         .attr("fill", "none")
@@ -795,7 +600,7 @@ function initTree() {
         .data(root.descendants())
         .enter().append("g")
         .attr("class", "tree-node")
-        .attr("transform", d => `translate(${d.x},${d.y})`)
+        .attr("transform", d => `translate(${d.x}, ${d.y})`)
         .style("cursor", "pointer")
         .on("click", (event, d) => {
             event.stopPropagation();
@@ -810,13 +615,15 @@ function initTree() {
             .attr("transform", `translate(${xOffset}, 0)`);
 
         // Card Background
-        grp.append("rect")
-            .attr("x", -cardWidth / 2)
-            .attr("y", -cardHeight / 2)
-            .attr("width", cardWidth)
-            .attr("height", cardHeight)
-            .attr("rx", 10)
-            .attr("class", "tree-card-bg");
+        if (familyData.node_style !== "circle") {
+            grp.append("rect")
+                .attr("x", -cardWidth / 2)
+                .attr("y", -cardHeight / 2)
+                .attr("width", cardWidth)
+                .attr("height", cardHeight)
+                .attr("rx", 10)
+                .attr("class", "tree-card-bg");
+        }
 
         // Clip Path
         const clipId = `clip-${data.id}`;
@@ -848,7 +655,7 @@ function initTree() {
 
         // Text Group
         const textGroup = grp.append("g")
-            .attr("transform", `translate(${-cardWidth / 2 + 60}, 0)`);
+            .attr("transform", `translate(${- cardWidth / 2 + 60}, 0)`);
 
         textGroup.append("text")
             .attr("class", "tree-card-name")
@@ -893,7 +700,7 @@ function initTree() {
 // --- 4. Fan Logic ---
 // --- 4. Fan Logic ---
 // --- 4. Fan Logic ---
-function initFan() {
+function initFan(startNodeId = null) {
     // 1. Update Dimensions on Init (Fixes centering if resized)
     width = window.innerWidth;
     height = window.innerHeight;
@@ -1053,18 +860,22 @@ function initFan() {
 
 
     // --- 3. BFS to Build Hierarchy from "Me" ---
-    if (!meNode) {
-        console.error("Me node not found!");
+    // Start BFS from "Me" or selected Start Node
+    const rootId = startNodeId || (ancestorMode ? "root" : "root");
+    const rootNode = allNodesMap.get(rootId);
+
+    if (!rootNode) {
+        console.error("Fan Root not found:", rootId);
         return;
     }
 
-    const newRoot = { ...meNode, children: [] };
+    const newRoot = { ...rootNode, children: [] };
     // Map to track new hierarchy nodes to attach children
     const hierMap = new Map();
-    hierMap.set(meNode.id, newRoot);
+    hierMap.set(rootNode.id, newRoot);
 
-    const visited = new Set([meNode.id]);
-    const queue = [{ id: meNode.id, depth: 0, node: newRoot }];
+    const visited = new Set([rootNode.id]);
+    const queue = [{ id: rootNode.id, depth: 0, node: newRoot }];
 
     // We need to reconstruct a tree for D3 pack/tree/partition
     // Level 0: Me
@@ -1096,9 +907,18 @@ function initFan() {
         ancestorAdj.get("m1").push("mg1");
         ancestorAdj.get("m1").push("mgf1");
 
-        // Father -> Grandfather (Already covered by mainRoot check above? No.)
-        // In mainRoot, Father(f1) is child of Grandfather(root). f1.parent is root. 
-        // So mainRoot logic covers Father->Grandfather.
+        // Paternal Line (Ancestors)
+        // Me -> Father
+        if (meNode && fatherNode) {
+            if (!ancestorAdj.has(meNode.id)) ancestorAdj.set(meNode.id, []);
+            ancestorAdj.get(meNode.id).push(fatherNode.id);
+        }
+
+        // Father -> Grandfather
+        if (fatherNode && grandFatherNode) {
+            if (!ancestorAdj.has(fatherNode.id)) ancestorAdj.set(fatherNode.id, []);
+            ancestorAdj.get(fatherNode.id).push(grandFatherNode.id);
+        }
 
         // Father -> Paternal Grandmother (Spouse of Grandfather)
         if (fatherNode && grandFatherNode && grandFatherNode.spouse) {
@@ -1111,6 +931,8 @@ function initFan() {
 
     while (queue.length > 0) {
         const { id, depth, node } = queue.shift();
+
+        if (depth >= 4) continue; // Limit Depth (BFS layer limit)
 
         // Select neighbors based on mode
         let neighbors = [];
@@ -1328,6 +1150,7 @@ function initFan() {
             .attr("class", "fan-segment")
             .attr("d", arc)
             .style("fill", d => {
+                if (d.depth === 4) return "#333"; // Expand Button Color
                 return isTop ? d.color : darken(d.color, 0.5 + (NUM_LAYERS - i) * 0.1);
             })
             .style("stroke", d => isTop ? "#333" : "none")
@@ -1337,7 +1160,11 @@ function initFan() {
             paths.style("cursor", "pointer")
                 .on("click", (event, d) => {
                     event.stopPropagation();
-                    showModal(d);
+                    if (d.depth === 4) {
+                        initFan(d.data.id);
+                    } else {
+                        showModal(d.data);
+                    }
                 })
                 .on("mouseover", function () {
                     d3.select(this).style("filter", "brightness(1.1)");
@@ -1364,7 +1191,7 @@ function initFan() {
             const deg = midAngle * 180 / Math.PI;
 
             // 1. Me Node: Center
-            if (d.depth === 0) return `translate(0,0)`;
+            if (d.depth === 0) return `translate(0, 0)`;
 
             // 2. Others: Rotate to align with slice
             let rotate = 0;
@@ -1390,10 +1217,22 @@ function initFan() {
                 .style("pointer-events", "none");
 
             el.append("text")
-                .text("Me")
+                .text(d.data.name)
                 .attr("y", 5)
                 .style("font-size", "14px") // Controlled small size
                 .style("font-weight", "bold");
+            return;
+        }
+
+        // Expand Button Text
+        if (d.depth === 4) {
+            el.attr("text-anchor", "middle")
+                .style("pointer-events", "none");
+            el.append("text").text("+")
+                .attr("y", 5)
+                .style("font-size", "20px")
+                .style("font-weight", "bold")
+                .style("fill", "white");
             return;
         }
 
@@ -1421,9 +1260,6 @@ function initFan() {
         } else {
             // Simplify text for outer rings
             const words = name.split(" ");
-            if (!d.children && words.length > 1) {
-                // Try to split if leaf node? Or just keep simple.
-            }
             el.append("text").text(relationText)
                 .attr("y", 7)
                 .style("font-size", "8px")
@@ -1440,6 +1276,29 @@ function initFan() {
 
     svg.call(zoom)
         .call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
+
+    // Add "Back" button if we are deep (not at true root)
+    if (startNodeId && startNodeId !== "root" && startNodeId !== "root") {
+        const backBtn = svg.append("g")
+            .attr("transform", `translate(50, 50)`)
+            .style("cursor", "pointer")
+            .on("click", () => initFan()); // Reset to default root
+
+        backBtn.append("rect")
+            .attr("width", 80)
+            .attr("height", 30)
+            .attr("rx", 15)
+            .attr("fill", "rgba(255, 255, 255, 0.2)")
+            .attr("stroke", "#fff");
+
+        backBtn.append("text")
+            .attr("x", 40)
+            .attr("y", 20)
+            .attr("text-anchor", "middle")
+            .text("Reset View")
+            .style("fill", "white")
+            .style("font-size", "12px");
+    }
 }
 
 // --- 5. Isometric 3D Logic ---
@@ -1605,7 +1464,7 @@ function init3DTree() {
         // z is negative for distinct downward extrusion
         const p = (lx, ly, lz = 0) => {
             const [ix, iy] = toIso(lx, ly);
-            return `${ix},${iy - lz}`;
+            return `${ix},${iy - lz} `;
         };
 
         // Rounded Top Face
@@ -1619,7 +1478,7 @@ function init3DTree() {
                     Q ${p(l, b, z)} ${p(l, b - r, z)}
                     L ${p(l, t + r, z)}
                     Q ${p(l, t, z)} ${p(l + r, t, z)}
-                    Z`;
+Z`;
         };
 
         const getSideSkirt = (currentExtrusion) => {
@@ -1653,7 +1512,7 @@ function init3DTree() {
                      Q ${p(r_edge, b, overlapZ)} ${p(r_edge - r, b, overlapZ)}
                      L ${p(l + r, b, overlapZ)}
                      Q ${p(l, b, overlapZ)} ${p(l, b - r, overlapZ)}
-                     Z`;
+Z`;
         };
 
         const topPath = getRoundedTopPath(0);
@@ -1698,7 +1557,7 @@ function init3DTree() {
 
         // So we translate by -thisExtrusion.
         const grp = blockLayer.append("g")
-            .attr("transform", `translate(0, ${-thisExtrusion})`);
+            .attr("transform", `translate(0, ${- thisExtrusion})`);
 
         // Side Wall (Lighter Tint)
         grp.append("path")
@@ -1721,14 +1580,14 @@ function init3DTree() {
         grp.append("text")
             .attr("x", lblX - 20)
             .attr("y", lblY - 10)
-            .text(`Generation ${siblings[0].depth}`)
+            .text(`Generation ${siblings[0].depth} `)
             .attr("fill", "#888")
             .attr("font-size", "12px")
             .attr("font-family", "sans-serif")
             .attr("font-weight", "500")
             .style("pointer-events", "none")
             .attr("text-anchor", "end")
-            .attr("transform", `rotate(-30, ${lblX},${lblY})`);
+            .attr("transform", `rotate(-30, ${lblX}, ${lblY})`);
     });
 
     // --- Links ---
@@ -1851,7 +1710,7 @@ function init3DTree() {
                 Q ${p1[0]},${p1[1]} ${c1_end[0]},${c1_end[1]}
                 L ${c2_start[0]},${c2_start[1]}
                 Q ${p2[0]},${p2[1]} ${c2_end[0]},${c2_end[1]}
-                L ${p3[0]},${p3[1]}`;
+                L ${p3[0]},${p3[1]} `;
     };
 
     linkLayer.selectAll(".iso-link")
@@ -2019,7 +1878,7 @@ function init3DTree() {
 
             // Solid Color
             avGrp.append("path")
-                .attr("id", `tile-path-${data.id}`)
+                .attr("id", `tile - path - ${data.id} `)
                 .attr("d", topPathIdx)
                 .attr("fill", tileColor) // Solid fill
                 .attr("stroke", "white")
@@ -2041,12 +1900,12 @@ function init3DTree() {
                 .style("pointer-events", "none")
                 // Add a subtle drop shadow to initials
                 .style("text-shadow", "1px 1px 2px rgba(0,0,0,0.3)")
-                .attr("transform", `translate(0, ${-tz}) matrix(${matrix})`);
+                .attr("transform", `translate(0, ${- tz}) matrix(${matrix})`);
 
             // Overlay for "Me" border
             if (data.isMe) {
                 avGrp.append("use")
-                    .attr("xlink:href", `#tile-path-${data.id}`)
+                    .attr("xlink:href", `#tile - path - ${data.id} `)
                     .attr("fill", "none")
                     .attr("stroke", "#FFD700")
                     .attr("stroke-width", 2)
@@ -2231,7 +2090,7 @@ function initVerticalTree() {
 
             if (h < 1) {
                 // If practically horizontal, straight line
-                return `M ${s.x},${s.y} L ${t.x},${t.y}`;
+                return `M ${s.x},${s.y} L ${t.x},${t.y} `;
             }
 
             // Determine sweep flags for curves
@@ -2251,7 +2110,7 @@ function initVerticalTree() {
                     Q ${midX},${s.y} ${midX},${s.y + signY * safeR}
                     L ${midX},${t.y - signY * safeR}
                     Q ${midX},${t.y} ${midX + safeR},${t.y}
-                    L ${t.x},${t.y}`;
+                    L ${t.x},${t.y} `;
         })
         .attr("fill", "none")
         .attr("stroke", "#4ecca3")
@@ -2264,7 +2123,7 @@ function initVerticalTree() {
         .enter().append("g")
         .attr("class", "tree-node")
         // Swap X and Y for translation
-        .attr("transform", d => `translate(${d.y},${d.x})`)
+        .attr("transform", d => `translate(${d.y}, ${d.x})`)
         .style("cursor", "pointer")
         .on("click", (event, d) => {
             event.stopPropagation();
@@ -2277,13 +2136,15 @@ function initVerticalTree() {
             .attr("transform", `translate(0, ${yOffset})`);
 
         // Card Background
-        grp.append("rect")
-            .attr("x", -cardWidth / 2)
-            .attr("y", -cardHeight / 2)
-            .attr("width", cardWidth)
-            .attr("height", cardHeight)
-            .attr("rx", 10)
-            .attr("class", "tree-card-bg");
+        if (familyData.node_style !== "circle") {
+            grp.append("rect")
+                .attr("x", -cardWidth / 2)
+                .attr("y", -cardHeight / 2)
+                .attr("width", cardWidth)
+                .attr("height", cardHeight)
+                .attr("rx", 10)
+                .attr("class", "tree-card-bg");
+        }
 
         const clipId = `vclip-${data.id}`;
         grp.append("clipPath")
@@ -2311,7 +2172,7 @@ function initVerticalTree() {
             .attr("stroke-width", data.isMe ? 4 : 1.5);
 
         const textGroup = grp.append("g")
-            .attr("transform", `translate(${-cardWidth / 2 + 60}, 0)`);
+            .attr("transform", `translate(${- cardWidth / 2 + 60}, 0)`);
 
         textGroup.append("text")
             .attr("class", "tree-card-name")
@@ -2421,7 +2282,7 @@ window.addEventListener("resize", () => {
 });
 
 // Initial Load
-initTree();
+// Initial Load removed, handled by initApp after data load
 
 // --- 7. Vertical Tree V2 (Bracket Connections) ---
 function initVerticalTreeV2() {
@@ -2439,115 +2300,176 @@ function initVerticalTreeV2() {
     // Translate slightly right to give space for root
     const g = svg.append("g").attr("transform", `translate(100, ${height / 2})`);
 
-    const root = d3.hierarchy(familyData);
+    // --- Data Transformation for Vertical Tree (Grandfather Rooted) ---
+    // 1. Deep Copy
+    const deepMe = JSON.parse(JSON.stringify(familyData));
+
+    // 2. Find Key Nodes
+    const deepFather = deepMe.children.find(d => d.id === 'f1' || d.name === 'Father');
+    const deepBrother = deepMe.children.find(d => d.id === 'c2' || d.name === 'Brother');
+    const deepSister = deepMe.children.find(d => d.id === 'c3' || d.name === 'Sister');
+
+    // Grandfather is child of Father in original data
+    const deepGrandfather = deepFather ? deepFather.children.find(d => d.id === 'gf1' || d.name === 'Grandfather') : null;
+
+    let vTreeRootData = deepMe; // Fallback
+
+    if (deepGrandfather && deepFather) {
+        // 3. Re-link Hierarchy
+
+        // A. Clean up Me (Remove Father, Brother, Sister from Me's children)
+        // Keep any other children Me might have (none in current data, but safeguards)
+        deepMe.children = deepMe.children.filter(d => d.id !== 'f1' && d.id !== 'c2' && d.id !== 'c3');
+
+        // B. Clean up Father (Remove Grandfather from Father's children)
+        deepFather.children = deepFather.children.filter(d => d.id !== 'gf1');
+
+        // C. Clean up Grandfather (Keep Uncles/Aunts, Add Father)
+        // Grandfather already has Uncles/Aunts as children
+        if (!deepGrandfather.children) deepGrandfather.children = [];
+        deepGrandfather.children.push(deepFather);
+
+        // D. Add Me + Siblings to Father
+        if (!deepFather.children) deepFather.children = [];
+        deepFather.children.push(deepMe);
+        if (deepBrother) deepFather.children.push(deepBrother);
+        if (deepSister) deepFather.children.push(deepSister);
+
+        // E. Set New Root
+        vTreeRootData = deepGrandfather;
+    }
+
+    const root = d3.hierarchy(vTreeRootData);
+
+    // Calculate Max Depth to Invert Layout
+    const maxDepth = d3.max(root.descendants(), d => d.depth);
+    const depthStep = cardWidth + 100; // REDUCED Spacing (was 200)
+    const totalWidth = maxDepth * depthStep;
 
     const treeLayout = d3.tree()
-        .nodeSize([cardHeight * 3.5, cardWidth + 150]) // Increased Height for safety
-        .separation((a, b) => a.parent == b.parent ? 1.1 : 1.25);
+        .nodeSize([1, depthStep]) // Unit spacing for custom separation
+        .separation((a, b) => {
+            // "First Generation" (Depth 1 - Children of Root) specific spacing
+            const isGen1 = a.depth === 1 && b.depth === 1;
+
+            let sep = isGen1 ? 65 : 80; // Reduced base Spacing (was 80/110)
+
+            const addSpacing = (d) => {
+                let s = 0;
+                // Spouse spacing
+                if (d.data.spouse) s += isGen1 ? 65 : 80; // Reduced (was 80/100)
+                if (d.data.spouse && d.data.spouse.parents && d.data.spouse.parents.length > 0) s += 40; // Reduced (was 60)
+                return s;
+            };
+
+            sep += addSpacing(a);
+            sep += addSpacing(b);
+
+            // Extra gap between different branches (cousins/uncles)
+            if (a.parent !== b.parent) sep += 20; // Reduced (was 40)
+
+            return sep;
+        });
 
     treeLayout(root);
 
-    // Links
-    g.selectAll(".tree-link")
+    // INVERT FUNC: Flip X coordinates
+    // Standard: Left (0) -> Right (Width)
+    const getX = (d) => d.y;
+    const getY = (d) => d.x;
+
+    const colorScale = d3.scaleOrdinal([
+        "#FF0055", // Neon Red
+        "#FFD700", // Gold
+        "#32FF32", // Neon Lime
+        "#FF6600", // Neon Orange
+        "#D500F9", // Neon Purple
+        "#00E5FF", // Neon Cyan (High Contrast)
+        "#FF3D00"  // Deep Orange
+    ]);
+
+    // REPLACING LINK LOGIC START
+    const linkSel = g.selectAll(".tree-link")
         .data(root.links())
         .enter().append("path")
         .attr("class", "tree-link")
         .attr("d", d => {
-            // Swap X and Y for Left-to-Right
-            const s = { y: d.source.x, x: d.source.y + cardWidth / 2 };
-            const t = { y: d.target.x, x: d.target.y - cardWidth / 2 };
+            // Visual Data Logic:
+            // Standard Flow: Source (Left) -> Target (Right)
+            const s = { x: getX(d.source) + cardWidth / 2, y: getY(d.source) };
+            const t = { x: getX(d.target) - cardWidth / 2, y: getY(d.target) };
 
-            // Logic:
-            // 1. Root (Grandparents): Combine GF and GM (Source Merge).
-            //    This creates a "Fork" coming FROM the parents.
-            // 2. Parents (Father/Mother): From Father Only (Single Source).
+            const visualSourceData = d.source.data;
+            const visualTargetData = d.target.data;
 
-            // --- Source Handling ---
-            if (d.source.data.spouse) {
-                // Parents/Grandparents with Spouse: Center-Gap Connection
-                // Line connects Father Bottom to Mother Top (Center X) and goes Right.
-
-                const centerX = s.x - cardWidth / 2;
+            // --- Source Handling (Ancestor/Parent) ---
+            if (visualSourceData.spouse) {
+                // Ancestor has Spouse: Center-Gap Fork Logic
+                const centerX = s.x - cardWidth / 2; // Center of Ancestor group
 
                 // Father Bottom Y
                 const fatherBottomY = s.y + cardHeight / 2;
                 // Mother Top Y
-                const spouseY = s.y + (cardHeight + 20); // Center of spouse card
+                const spouseY = s.y + (cardHeight + 20);
                 const motherTopY = spouseY - cardHeight / 2;
 
                 // 1. Vertical Link between Spouses (Center Gap)
-                const verticalLine = `M ${centerX},${fatherBottomY} V ${motherTopY}`;
-                // Note: Since fatherBottomY and motherTopY are just 20px apart, this is a short vertical line.
+                const verticalLine = `M ${centerX},${fatherBottomY} V ${motherTopY} `;
 
-                // 2. Child Connector (From Middle of Vertical Link to Target)
+                // 2. Connector from Middle of Vertical Link
                 const midY = (s.y + spouseY) / 2;
 
-                // Path: M centerX, midY -> H t.x ...
-                // Since it starts between cards, it goes Right freely.
-
+                // Orthogonal Step (Rightwards to t.x)
                 let mainPath = "";
                 const dy = t.y - midY;
+                let midX = (centerX + t.x) / 2;
 
-                // If rectilinear
-                if (Math.abs(dy) < 1) {
-                    mainPath = `M ${centerX},${midY} L ${t.x},${t.y}`;
-                } else {
-                    // Standard Orthogonal Step
-                    let midX = (centerX + t.x) / 2;
-                    const minGap = 50;
-                    // Ensure we clear the card width first? 
-                    // centerX is middle. Right edge is centerX + cardWidth/2.
-                    // We need to go at least to Right Edge + gap.
-
-                    const rightEdge = centerX + cardWidth / 2;
-                    if (midX < rightEdge + 20) {
-                        midX = rightEdge + 50;
-                    }
-
-                    mainPath = `M ${centerX},${midY} H ${midX} V ${t.y} H ${t.x}`;
+                const rightEdge = centerX + cardWidth / 2;
+                if (midX < rightEdge + 20) {
+                    midX = rightEdge + 50;
                 }
 
-                // Just the vertical link and the main path.
+                if (Math.abs(dy) < 1) {
+                    mainPath = `M ${centerX},${midY} L ${t.x},${t.y} `;
+                } else {
+                    mainPath = `M ${centerX},${midY} H ${midX} V ${t.y} H ${t.x} `;
+                }
+
                 return verticalLine + mainPath;
             }
-            // Target Handling (Child -> Parents with Spouse)
-            // Use strict Square Bracket style "-["
-            if (d.target.data.spouse) {
+
+            // --- Target Handling (Descendant/Child) ---
+            // If Descendant has Spouse => Square Bracket Style (Left facing bracket)
+            if (visualTargetData.spouse) {
                 const spouseY = t.y + (cardHeight + 20);
-                const midY = (s.y + t.y) / 2; // Midpoint logic depends on layout
-                // Actually target fork is strictly geometric based on target position
+                const midY = (s.y + t.y) / 2;
 
-                const bracketX = t.x - 20; // Gapped from Target Cards
+                const bracketX = t.x - 20; // 20px Left of Descendant
 
-                // 1. Horizontal Connectors from Bracket to Parents
-                const fatherLine = `M ${bracketX},${t.y} L ${t.x},${t.y}`;
-                const motherLine = `M ${bracketX},${spouseY} L ${t.x},${spouseY}`;
+                // 1. Horizontal Connectors from Bracket to Pair
+                const fatherLine = `M ${bracketX},${t.y} L ${t.x},${t.y} `;
+                const motherLine = `M ${bracketX},${spouseY} L ${t.x},${spouseY} `;
 
                 // 2. Vertical Bracket Line
-                const verticalLine = `M ${bracketX},${t.y} L ${bracketX},${spouseY}`;
+                const verticalLine = `M ${bracketX},${t.y} L ${bracketX},${spouseY} `;
 
                 // 3. Source Connector (Source -> Bracket Midpoint)
                 const targetMidY = (t.y + spouseY) / 2;
 
-                // Orthogonal Path from s to (bracketX, targetMidY)
                 let midX = (s.x + bracketX) / 2;
                 const minGap = 50;
+
                 if (bracketX - s.x > minGap * 2 && midX - s.x < minGap) {
                     midX = s.x + minGap;
                 }
 
-                const r = 10;
                 const dy = targetMidY - s.y;
-                const signY = dy > 0 ? 1 : -1;
-                // Check if simple straight line works (if aligned)
                 let mainPath = "";
 
                 if (Math.abs(dy) < 1) {
-                    mainPath = `M ${s.x},${s.y} L ${bracketX},${targetMidY}`;
+                    mainPath = `M ${s.x},${s.y} L ${bracketX},${targetMidY} `;
                 } else {
-                    // Rectilinear Path (Square corners, no Q)
-                    // H midX V t.y H t.x
-                    mainPath = `M ${s.x},${s.y} H ${midX} V ${targetMidY} H ${bracketX}`;
+                    mainPath = `M ${s.x},${s.y} H ${midX} V ${targetMidY} H ${bracketX} `;
                 }
 
                 return fatherLine + motherLine + verticalLine + mainPath;
@@ -2562,23 +2484,23 @@ function initVerticalTreeV2() {
                 // Normal Orthogonal Path
                 let midX = (s.x + t.x) / 2;
                 const minGap = 50;
-                if (midX - s.x < minGap && (t.x - s.x) > minGap * 2) {
+
+                if (t.x - s.x > minGap * 2 && midX - s.x < minGap) {
                     midX = s.x + minGap;
                 }
 
-                // Rectilinear Path
                 const dy = t.y - s.y;
                 if (Math.abs(dy) < 1) {
-                    return `M ${s.x},${s.y} L ${t.x},${t.y}`;
+                    return `M ${s.x},${s.y} L ${t.x},${t.y} `;
                 }
 
-                return `M ${s.x},${s.y} H ${midX} V ${t.y} H ${t.x}`;
+                return `M ${s.x},${s.y} H ${midX} V ${t.y} H ${t.x} `;
             }
         })
         .attr("fill", "none")
-        .attr("stroke", "#4ecca3")
-        .attr("stroke-width", 1.5)
-        .attr("opacity", 0.6);
+        .attr("stroke", "#FFFFFF") // All Main Tree Connections are White
+        .attr("stroke-width", 3)
+        .attr("opacity", 1.0);
 
     // Nodes (Cards)
     const nodes = g.selectAll(".tree-node")
@@ -2586,7 +2508,7 @@ function initVerticalTreeV2() {
         .enter().append("g")
         .attr("class", "tree-node")
         // Swap X and Y for translation
-        .attr("transform", d => `translate(${d.y},${d.x})`)
+        .attr("transform", d => `translate(${getX(d)}, ${getY(d)})`)
         .style("cursor", "pointer")
         .on("click", (event, d) => {
             event.stopPropagation();
@@ -2633,7 +2555,7 @@ function initVerticalTreeV2() {
             .attr("stroke-width", data.isMe ? 4 : 1.5);
 
         const textGroup = grp.append("g")
-            .attr("transform", `translate(${-cardWidth / 2 + 60}, 0)`);
+            .attr("transform", `translate(${- cardWidth / 2 + 60}, 0)`);
 
         textGroup.append("text")
             .attr("class", "tree-card-name")
@@ -2655,10 +2577,22 @@ function initVerticalTreeV2() {
             // Spouse exists: Render Spouse Card
             renderVCard(el, d.data.spouse, true);
 
+            // Draw Vertical Line between Cards (Childless Couple Connection)
+            // Main Card Bottom: Y = 30
+            // Spouse Card Top: Y = 50 (80 - 30)
+            el.append("path")
+                .attr("d", `M 0,30 V 50`)
+                .attr("stroke", "#fff")
+                .attr("stroke-width", 3)
+                .attr("opacity", 1.0);
+
+
+
+
             // Check for Spousal Parents (Maternal Grandparents etc.)
             if (d.data.spouse.parents && d.data.spouse.parents.length > 0) {
                 // Render them to the LEFT of the spouse
-                const parentXOffset = -(cardWidth + 150);
+                const parentXOffset = -300;
                 const spouseYOffset = cardHeight + 20; // Relative to Main Node
 
                 const p1 = d.data.spouse.parents[0];
@@ -2680,18 +2614,18 @@ function initVerticalTreeV2() {
 
                 // Draw Vertical Line
                 el.append("path")
-                    .attr("d", `M ${parentXOffset},${p1Bottom} V ${p2Top}`)
-                    .attr("stroke", "#4ecca3")
-                    .attr("stroke-width", 1.5);
+                    .attr("d", `M ${parentXOffset},${p1Bottom} V ${p2Top} `)
+                    .attr("stroke", colorScale(d.data.spouse.id)) // Spousal Line Color
+                    .attr("stroke-width", 3);
 
                 // Horizontal Line to Spouse (from Midpoint)
                 const midY = (p1Y + p2Y) / 2; // Should be spouseYOffset
                 // Connect to Left Edge of Spouse Card (-cardWidth/2)
 
                 el.append("path")
-                    .attr("d", `M ${parentXOffset},${midY} H ${-cardWidth / 2}`)
-                    .attr("stroke", "#4ecca3")
-                    .attr("stroke-width", 1.5)
+                    .attr("d", `M ${parentXOffset},${midY} H ${-cardWidth / 2} `)
+                    .attr("stroke", colorScale(d.data.spouse.id)) // Spousal Line Color
+                    .attr("stroke-width", 3)
                     .attr("fill", "none");
             }
         }
@@ -2708,3 +2642,56 @@ function initVerticalTreeV2() {
     const initialTransform = d3.zoomIdentity.translate(100, height / 2).scale(1);
     svg.call(zoom).call(zoom.transform, initialTransform);
 }
+
+// Initialize App
+// Load Data and Initialize
+d3.json("data.json").then(data => {
+    familyData = data;
+    initApp();
+
+    // Show Success Toast
+    const toast = d3.select("body").append("div")
+        .style("position", "fixed")
+        .style("bottom", "20px")
+        .style("left", "20px")
+        .style("background", "rgba(0, 50, 0, 0.9)")
+        .style("color", "#4ecca3")
+        .style("padding", "15px 25px")
+        .style("border", "1px solid #4ecca3")
+        .style("border-radius", "5px")
+        .style("font-family", "sans-serif")
+        .style("z-index", "10000")
+        .html("<strong>Dataset Loaded:</strong> data.json");
+
+    setTimeout(() => {
+        toast.transition().duration(1000).style("opacity", 0).remove();
+    }, 3000);
+}).catch(error => {
+    console.error("Error loading data.json:", error);
+
+    // Show Error on Screen
+    d3.select("body").append("div")
+        .style("position", "fixed")
+        .style("top", "50%")
+        .style("left", "50%")
+        .style("transform", "translate(-50%, -50%)")
+        .style("background", "rgba(50, 0, 0, 0.9)")
+        .style("color", "white")
+        .style("padding", "30px")
+        .style("border", "2px solid red")
+        .style("border-radius", "10px")
+        .style("text-align", "center")
+        .style("z-index", "9999")
+        .html(`
+            <h2>Data Loading Failed</h2>
+            <p>Could not load <code>data.json</code>. This is likely due to browser security restrictions (CORS) when opening files directly.</p>
+            <hr style="border-color: #555;">
+            <p><strong>Option 1:</strong> Use a Local Server (Recommended)</p>
+            <ul style="text-align: left; opacity: 0.8;">
+                <li>VS Code: Right-click index.html > "Open with Live Server"</li>
+                <li>Python: <code>python -m http.server</code></li>
+            </ul>
+            <p><strong>Option 2:</strong> Re-enable <code>data.js</code> in index.html for local file support.</p>
+            <button onclick="location.reload()" style="padding: 10px 20px; cursor: pointer; background: #444; color: white; border: none; margin-top: 10px;">Retry</button>
+        `);
+});
