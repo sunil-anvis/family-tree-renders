@@ -1,530 +1,990 @@
 {
-    "id": "root",
-    "node_style": "circle",
-    "name": "Me",
-    "isMe": true,
-    "age": 25,
-    "gender": "Male",
-    "location": "Mumbai, India",
-    "coords": [
-        72.9,
-        19.1
-    ],
-    "spouse": {
-        "id": "s1",
-        "name": "Wifey",
-        "age": 24,
-        "gender": "Female",
-        "location": "Mumbai, India",
-        "photo": "https://ui-avatars.com/api/?name=Wifey&background=FF69B4&color=fff",
-        "relation": "Wifey"
-    },
-    "photo": "https://ui-avatars.com/api/?name=Me&background=0D8ABC&color=fff",
-    "relation": "Me",
-    "children": [
+    "success": true,
+    "message": "Family Tree Fetched Successfully!..",
+    "status_code": 200,
+    "data": [
         {
-            "id": "f1",
-            "name": "Father",
-            "spouse": {
-                "id": "m1",
-                "name": "Mother",
-                "age": 48,
-                "gender": "Female",
-                "location": "Mumbai, India",
-                "photo": "https://ui-avatars.com/api/?name=Mother&background=FF69B4&color=fff",
-                "relation": "Mother",
-                "parents": [
-                    {
-                        "id": "mg1",
-                        "name": "Maternal GF",
-                        "age": 75,
-                        "gender": "Male",
-                        "photo": "https://ui-avatars.com/api/?name=Mat+GF&background=random",
-                        "relation": "Grandfather"
-                    },
-                    {
-                        "id": "mg2",
-                        "name": "Maternal GM",
-                        "age": 70,
-                        "gender": "Female",
-                        "photo": "https://ui-avatars.com/api/?name=Mat+GM&background=random",
-                        "relation": "Grandmother"
-                    }
-                ]
-            },
-            "age": 50,
-            "gender": "Male",
-            "location": "Mumbai, India",
-            "coords": [
-                72.8777,
-                19.0760
+            "id": 33,
+            "name": "Nami Gomes",
+            "gender": "f",
+            "dob": "2011-12-20",
+            "mid": 286,
+            "fid": 289,
+            "pids": [
+                287
             ],
-            "photo": "https://ui-avatars.com/api/?name=Father&background=0D8ABC&color=fff",
+            "tags": [
+                "kintree_temp_three"
+            ],
+            "status": true,
+            "is_system_password": 0,
+            "photo": "http://127.0.0.1:8000/uploads/profile-images/byvEv0WhKg2gwH5zhAJNjvnBvLMnovWjXuzQHfcL.jpg",
+            "is_user_added_by_me": 0,
+            "relation": "Myself",
+            "relation_id": null,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 289,
+            "name": "Victor Gomes",
+            "gender": "m",
+            "dob": null,
+            "mid": 321,
+            "fid": 315,
+            "pids": [
+                286
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
             "relation": "Father",
-            "children": [
-                {
-                    "id": "gf1",
-                    "name": "Grandfather",
-                    "spouse": {
-                        "name": "Grandmother",
-                        "age": 76,
-                        "gender": "Female",
-                        "location": "Mumbai, India",
-                        "photo": "https://ui-avatars.com/api/?name=Grand+Mother&background=random",
-                        "relation": "Paternal Grandmother"
-                    },
-                    "age": 78,
-                    "gender": "Male",
-                    "location": "Mumbai, India",
-                    "coords": [
-                        72.8777,
-                        19.0760
-                    ],
-                    "photo": "https://ui-avatars.com/api/?name=Grand+Father&background=random",
-                    "relation": "Grandfather",
-                    "children": [
-                        {
-                            "id": "u1",
-                            "name": "Uncle",
-                            "spouse": {
-                                "id": "ua1",
-                                "name": "Aunt (In-Law)",
-                                "age": 45,
-                                "gender": "Female",
-                                "location": "New York, USA",
-                                "photo": "https://ui-avatars.com/api/?name=Aunt+In+Law&background=FF69B4&color=fff",
-                                "relation": "Aunt",
-                                "parents": [
-                                    {
-                                        "id": "ap1",
-                                        "name": "Aunt's Dad",
-                                        "age": 70,
-                                        "gender": "Male",
-                                        "photo": "https://ui-avatars.com/api/?name=Aunt+Dad&background=random",
-                                        "relation": "Father"
-                                    },
-                                    {
-                                        "id": "ap2",
-                                        "name": "Aunt's Mom",
-                                        "age": 68,
-                                        "gender": "Female",
-                                        "photo": "https://ui-avatars.com/api/?name=Aunt+Mom&background=random",
-                                        "relation": "Mother"
-                                    }
-                                ]
-                            },
-                            "age": 48,
-                            "gender": "Male",
-                            "location": "New York, USA",
-                            "coords": [
-                                -74.0060,
-                                40.7128
-                            ],
-                            "photo": "https://ui-avatars.com/api/?name=Uncle&background=random",
-                            "relation": "Uncle",
-                            "children": [
-                                {
-                                    "id": "co1",
-                                    "name": "Cousin 1",
-                                    "spouse": {
-                                        "id": "co1s",
-                                        "name": "Cousin 1 Spouse",
-                                        "age": 28,
-                                        "gender": "Male",
-                                        "location": "Chicago, USA",
-                                        "photo": "https://ui-avatars.com/api/?name=Cousin+Spouse&background=random",
-                                        "relation": "In-Law"
-                                    },
-                                    "age": 26,
-                                    "gender": "Female",
-                                    "location": "Chicago, USA",
-                                    "coords": [
-                                        -87.6298,
-                                        41.8781
-                                    ],
-                                    "photo": "https://ui-avatars.com/api/?name=Cousin+One&background=random",
-                                    "relation": "Cousin",
-                                    "children": [
-                                        {
-                                            "id": "n1",
-                                            "name": "Nephew 1",
-                                            "age": 5,
-                                            "gender": "Male",
-                                            "location": "Chicago, USA",
-                                            "coords": [
-                                                -87.65,
-                                                41.90
-                                            ],
-                                            "photo": "https://ui-avatars.com/api/?name=Nephew&background=random",
-                                            "relation": "First Cousin Once Removed"
-                                        }
-                                    ]
-                                },
-                                {
-                                    "id": "co2",
-                                    "name": "Cousin 2",
-                                    "age": 24,
-                                    "gender": "Male",
-                                    "location": "Riyadh, Saudi",
-                                    "coords": [
-                                        46.6753,
-                                        24.7136
-                                    ],
-                                    "photo": "https://ui-avatars.com/api/?name=Cousin+Two&background=random",
-                                    "relation": "Cousin"
-                                }
-                            ]
-                        },
-                        {
-                            "id": "a1",
-                            "name": "Aunt",
-                            "spouse": {
-                                "id": "au1",
-                                "name": "Uncle (In-Law)",
-                                "age": 48,
-                                "gender": "Male",
-                                "location": "Mumbai, India",
-                                "photo": "https://ui-avatars.com/api/?name=Uncle+In+Law&background=random",
-                                "relation": "Uncle In Law",
-                                "parents": [
-                                    {
-                                        "id": "up1",
-                                        "name": "Uncle's Dad",
-                                        "age": 72,
-                                        "gender": "Male",
-                                        "photo": "https://ui-avatars.com/api/?name=Uncle+Dad&background=random",
-                                        "relation": "Father"
-                                    },
-                                    {
-                                        "id": "up2",
-                                        "name": "Uncle's Mom",
-                                        "age": 70,
-                                        "gender": "Female",
-                                        "photo": "https://ui-avatars.com/api/?name=Uncle+Mom&background=random",
-                                        "relation": "Mother"
-                                    }
-                                ]
-                            },
-                            "age": 45,
-                            "gender": "Female",
-                            "location": "Mumbai, India",
-                            "coords": [
-                                72.8,
-                                19.0
-                            ],
-                            "photo": "https://ui-avatars.com/api/?name=Aunt&background=FF69B4&color=fff",
-                            "relation": "Aunt",
-                            "children": [
-                                {
-                                    "id": "co3",
-                                    "name": "Cousin 3",
-                                    "age": 20,
-                                    "gender": "Male",
-                                    "location": "Mumbai, India",
-                                    "spouse": {
-                                        "id": "co3s",
-                                        "name": "wife of cousin 3",
-                                        "age": 20,
-                                        "gender": "Female",
-                                        "location": "Mumbai, India",
-                                        "photo": "https://ui-avatars.com/api/?name=wife of cousin 3&background=random",
-                                        "relation": "wife of cousin 3"
-                                    },
-                                    "coords": [
-                                        72.85,
-                                        19.05
-                                    ],
-                                    "photo": "https://ui-avatars.com/api/?name=Cousin+Three&background=random",
-                                    "relation": "Cousin"
-                                },
-                                {
-                                    "id": "co4",
-                                    "name": "Cousin 4",
-                                    "age": 18,
-                                    "gender": "Female",
-                                    "location": "Mumbai, India",
-                                    "coords": [
-                                        72.82,
-                                        19.02
-                                    ],
-                                    "photo": "https://ui-avatars.com/api/?name=Cousin+Four&background=random",
-                                    "relation": "Cousin"
-                                }
-                            ]
-                        },
-                        {
-                            "id": "gu1",
-                            "name": "Great Aunt",
-                            "spouse": {
-                                "id": "gua1",
-                                "name": "Great Uncle",
-                                "age": 75,
-                                "gender": "Male",
-                                "location": "Delhi, India",
-                                "photo": "https://ui-avatars.com/api/?name=Great+Uncle&background=random",
-                                "relation": "Great Uncle"
-                            },
-                            "age": 70,
-                            "gender": "Female",
-                            "location": "Delhi, India",
-                            "coords": [
-                                77.2090,
-                                28.6139
-                            ],
-                            "photo": "https://ui-avatars.com/api/?name=Great+Aunt&background=random",
-                            "relation": "Great Aunt",
-                            "children": [
-                                {
-                                    "id": "c5",
-                                    "name": "Cousin 5",
-                                    "age": 40,
-                                    "gender": "Male",
-                                    "location": "Pune, India",
-                                    "coords": [
-                                        73.8567,
-                                        18.5204
-                                    ],
-                                    "photo": "https://ui-avatars.com/api/?name=Cousin+Five&background=random",
-                                    "relation": "Cousin"
-                                },
-                                {
-                                    "id": "c6",
-                                    "name": "Cousin 6",
-                                    "age": 38,
-                                    "gender": "Female",
-                                    "location": "Goa, India",
-                                    "coords": [
-                                        74.1240,
-                                        15.2993
-                                    ],
-                                    "photo": "https://ui-avatars.com/api/?name=Cousin+Six&background=random",
-                                    "relation": "Cousin"
-                                }
-                            ]
-                        },
-                        {
-                            "id": "yu1",
-                            "name": "Young Uncle",
-                            "spouse": {
-                                "id": "yua1",
-                                "name": "Young Aunt",
-                                "age": 38,
-                                "gender": "Female",
-                                "location": "Bangalore, India",
-                                "photo": "https://ui-avatars.com/api/?name=Young+Aunt&background=FF69B4&color=fff",
-                                "relation": "Aunt"
-                            },
-                            "age": 42,
-                            "gender": "Male",
-                            "location": "Bangalore, India",
-                            "coords": [
-                                77.5946,
-                                12.9716
-                            ],
-                            "photo": "https://ui-avatars.com/api/?name=Young+Uncle&background=random",
-                            "relation": "Great Uncle",
-                            "children": [
-                                {
-                                    "id": "c7",
-                                    "name": "Cousin 7",
-                                    "age": 15,
-                                    "gender": "Female",
-                                    "location": "Bangalore, India",
-                                    "coords": [
-                                        77.6,
-                                        12.95
-                                    ],
-                                    "spouse": {
-                                        "name": "husband of cousin 7",
-                                        "age": 20,
-                                        "gender": "Male",
-                                        "location": "Mumbai, India",
-                                        "photo": "https://ui-avatars.com/api/?name=husband of cousin 7&background=random",
-                                        "relation": "husband of cousin 7"
-                                    },
-                                    "children": [
-                                        {
-                                            "id": "c7c1",
-                                            "name": "Cousin 7 Child 1",
-                                            "age": 1,
-                                            "gender": "Male",
-                                            "location": "Bangalore, India",
-                                            "coords": [
-                                                77.6,
-                                                12.95
-                                            ],
-                                            "spouse": {
-                                                "id": "c7c1s",
-                                                "name": "wife of cousin 7 child 1",
-                                                "age": 20,
-                                                "gender": "Female",
-                                                "location": "Mumbai, India",
-                                                "photo": "https://ui-avatars.com/api/?name=wife of cousin 7 child 1&background=random",
-                                                "relation": "wife of cousin 7 child 1"
-                                            },
-                                            "photo": "https://ui-avatars.com/api/?name=Cousin+Seven+Child+One&background=random",
-                                            "relation": "Cousin"
-                                        }
-                                    ],
-                                    "photo": "https://ui-avatars.com/api/?name=Cousin+Seven&background=random",
-                                    "relation": "Cousin"
-                                }
-                            ]
-                        }
-                    ]
-                }
+            "relation_id": 1,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 315,
+            "name": "Rafeal Paul",
+            "gender": "m",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [
+                321
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Grandfather",
+            "relation_id": 9,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 321,
+            "name": "Katherine Paul",
+            "gender": "f",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [
+                315
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "http://127.0.0.1:8000/uploads/user-profile/321_images/5xQHyOhYJg1iIlh9ORjrtaWiQ6Zg4Kway8A6jlvk.jpg",
+            "is_user_added_by_me": 1,
+            "relation": "Grandmother",
+            "relation_id": 10,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 326,
+            "name": "Martha Ford",
+            "gender": "f",
+            "dob": null,
+            "mid": 321,
+            "fid": 315,
+            "pids": [
+                786
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Aunt (Bua)",
+            "relation_id": 33,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 327,
+            "name": "Chris Paul",
+            "gender": "m",
+            "dob": null,
+            "mid": 321,
+            "fid": 315,
+            "pids": [
+                364
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "http://127.0.0.1:8000/uploads/profile-images/bNlh4Y6VdhC1uAARNwR5BO6g7w9pkg2CtWydk535.jpg",
+            "is_user_added_by_me": 1,
+            "relation": "Uncle",
+            "relation_id": 13,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 334,
+            "name": "Gary Paul",
+            "gender": "m",
+            "dob": null,
+            "mid": 321,
+            "fid": 315,
+            "pids": [
+                348
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Uncle",
+            "relation_id": 13,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 401,
+            "name": "Dead Sister",
+            "gender": "f",
+            "dob": null,
+            "mid": 321,
+            "fid": 315,
+            "pids": [
+                402
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Aunt (Bua)",
+            "relation_id": 33,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 402,
+            "name": "Dead Hubby",
+            "gender": "m",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [
+                401
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Uncle (Fufa)",
+            "relation_id": 34,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 405,
+            "name": "Dead Son",
+            "gender": "m",
+            "dob": null,
+            "mid": 401,
+            "fid": 402,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin brother (Bua`s Son)",
+            "relation_id": 42,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 406,
+            "name": "Dead Member",
+            "gender": "m",
+            "dob": null,
+            "mid": 401,
+            "fid": 402,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin brother (Bua`s Son)",
+            "relation_id": 42,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 407,
+            "name": "Vhdd Fggfs",
+            "gender": "m",
+            "dob": null,
+            "mid": 401,
+            "fid": 402,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin brother (Bua`s Son)",
+            "relation_id": 42,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 409,
+            "name": "Dsed Membe",
+            "gender": "f",
+            "dob": null,
+            "mid": 401,
+            "fid": 402,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin sister (Bua`s Daughter)",
+            "relation_id": 43,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 411,
+            "name": "Bhkj Ojn",
+            "gender": "f",
+            "dob": null,
+            "mid": 401,
+            "fid": 402,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin sister (Bua`s Daughter)",
+            "relation_id": 43,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 412,
+            "name": "Bjhlk Dtfyf",
+            "gender": "m",
+            "dob": null,
+            "mid": 401,
+            "fid": 402,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin brother (Bua`s Son)",
+            "relation_id": 42,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 413,
+            "name": "Mkm Njh",
+            "gender": "m",
+            "dob": null,
+            "mid": 401,
+            "fid": 402,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin brother (Bua`s Son)",
+            "relation_id": 42,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 414,
+            "name": "Nkkjlm Ctft",
+            "gender": "m",
+            "dob": null,
+            "mid": 401,
+            "fid": 402,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin brother (Bua`s Son)",
+            "relation_id": 42,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 348,
+            "name": "Kesi Paul",
+            "gender": "f",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [
+                334
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 0,
+            "photo": "http://127.0.0.1:8000/uploads/user-profile/348_images/bTNdzwwOID25oh2GiAixMeqBMBSqdBFp2chx77dK.jpg",
+            "is_user_added_by_me": 1,
+            "relation": "Aunt",
+            "relation_id": 14,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 361,
+            "name": "Tom Paul",
+            "gender": "m",
+            "dob": null,
+            "mid": 348,
+            "fid": 334,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "http://127.0.0.1:8000/uploads/user-profile/361_images/YSey1sngwDXTC2ObOr6faluljTAAkruHq3CknbFX.jpg",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin brother",
+            "relation_id": 27,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 362,
+            "name": "Warner Paul",
+            "gender": "m",
+            "dob": null,
+            "mid": 348,
+            "fid": 334,
+            "pids": [
+                999
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "http://127.0.0.1:8000/uploads/user-profile/362_images/XmSlIfEFmS4V4mienwNNm9o3ZGe5c9cexR3T7WzP.jpg",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin brother",
+            "relation_id": 27,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 999,
+            "name": "Hariyali Aakash",
+            "gender": "f",
+            "dob": "2011-12-20",
+            "fid": null,
+            "mid": null,
+            "pids": [
+                362
             ]
         },
         {
-            "id": "c2",
-            "name": "Brother",
-            "spouse": {
-                "id": "c2s",
-                "name": "Sister In Law",
-                "age": 21,
-                "gender": "Female",
-                "location": "London, UK",
-                "photo": "https://ui-avatars.com/api/?name=Sister+In+Law&background=FF69B4&color=fff",
-                "relation": "Sister In Law"
-            },
-            "age": 22,
-            "gender": "Male",
-            "location": "London, UK",
-            "coords": [
-                -0.1276,
-                51.5074
+            "id": 389,
+            "name": "Alive Member",
+            "gender": "m",
+            "dob": null,
+            "mid": 348,
+            "fid": 334,
+            "pids": [],
+            "tags": [
+                "kintree"
             ],
-            "photo": "https://ui-avatars.com/api/?name=Brother&background=random",
-            "relation": "Brother",
-            "children": [
-                {
-                    "id": "n2",
-                    "name": "Nephew 2",
-                    "age": 1,
-                    "gender": "Male",
-                    "location": "London, UK",
-                    "coords": [
-                        -0.1,
-                        51.5
-                    ],
-                    "spouse": {
-                        "name": "wife of nephew 2",
-                        "age": 27,
-                        "gender": "Female",
-                        "location": "Mumbai, India",
-                        "photo": "https://ui-avatars.com/api/?name=wife of nephew 2&background=random",
-                        "relation": "wife of nephew 2"
-                    },
-                    "children": [
-                        {
-                            "id": "n2c1",
-                            "name": "Nephew 2 Child 1",
-                            "age": 1,
-                            "gender": "Male",
-                            "location": "London, UK",
-                            "coords": [
-                                -0.1,
-                                51.5
-                            ],
-                            "spouse": {
-                                "name": "wife of nephew 2 child 1",
-                                "age": 27,
-                                "gender": "Female",
-                                "location": "Mumbai, India",
-                                "photo": "https://ui-avatars.com/api/?name=wife of nephew 2 child 1&background=random",
-                                "relation": "wife of nephew 2 child 1"
-                            },
-                            "photo": "https://ui-avatars.com/api/?name=Nephew+two+Child+one&background=random",
-                            "relation": "Nephew"
-                        }
-                    ],
-                    "photo": "https://ui-avatars.com/api/?name=Nephew+two&background=random",
-                    "relation": "Nephew"
-                }
-            ]
+            "status": true,
+            "is_system_password": 1,
+            "photo": "http://127.0.0.1:8000/uploads/user-profile/389_images/rjrwCijtKT7sG0I8ThR2EsY8gLAdeNQmP4UgEsmz.jpg",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin brother",
+            "relation_id": 27,
+            "is_godfather": false,
+            "has_godfather": false
         },
         {
-            "id": "c3",
-            "name": "Sister",
-            "spouse": {
-                "id": "c3s",
-                "name": "Brother In Law",
-                "age": 20,
-                "gender": "Male",
-                "location": "Dubai, UAE",
-                "photo": "https://ui-avatars.com/api/?name=Brother+In+Law&background=random",
-                "relation": "Brother In Law"
-            },
-            "age": 19,
-            "gender": "Female",
-            "location": "Dubai, UAE",
-            "coords": [
-                55.2708,
-                25.2048
+            "id": 364,
+            "name": "Ivaniya Paul",
+            "gender": "f",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [
+                327
             ],
-            "photo": "https://ui-avatars.com/api/?name=Sister&background=FF69B4&color=fff",
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Aunt",
+            "relation_id": 14,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 390,
+            "name": "Chris Son",
+            "gender": "m",
+            "dob": null,
+            "mid": 364,
+            "fid": 327,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 0,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin brother",
+            "relation_id": 27,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 398,
+            "name": "Eddie Paul ",
+            "gender": "m",
+            "dob": null,
+            "mid": 364,
+            "fid": 327,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin brother",
+            "relation_id": 27,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 400,
+            "name": "Dead2 Member",
+            "gender": "m",
+            "dob": null,
+            "mid": 364,
+            "fid": 327,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Cousin brother",
+            "relation_id": 27,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 286,
+            "name": "Rosee Gomes",
+            "gender": "f",
+            "dob": null,
+            "mid": 322,
+            "fid": 325,
+            "pids": [
+                289
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Mother",
+            "relation_id": 2,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 325,
+            "name": "Ternil Gomes",
+            "gender": "m",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [
+                322
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Grandfather(Nana)",
+            "relation_id": 46,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 322,
+            "name": "Gloriaa Gomes",
+            "gender": "f",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [
+                325
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Grandmother(Nani)",
+            "relation_id": 47,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 290,
+            "name": "Mary Gomes",
+            "gender": "f",
+            "dob": null,
+            "mid": 286,
+            "fid": 289,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
             "relation": "Sister",
-            "children": [
-                {
-                    "id": "ni1",
-                    "name": "Niece 1",
-                    "age": 1,
-                    "gender": "Female",
-                    "location": "Dubai, UAE",
-                    "coords": [
-                        55.3,
-                        25.2
-                    ],
-                    "spouse": {
-                        "name": "pati",
-                        "age": 20,
-                        "gender": "Female",
-                        "location": "Mumbai, India",
-                        "photo": "https://ui-avatars.com/api/?name=wife of Niece 1&background=random",
-                        "relation": "husband of Niece 1"
-                    },
-                    "children": [
-                        {
-                            "id": "ni1c1",
-                            "name": "Niece 1 Child 1",
-                            "age": 1,
-                            "gender": "Male",
-                            "location": "Dubai, UAE",
-                            "coords": [
-                                55.3,
-                                25.2
-                            ],
-                            "spouse": {
-                                "name": "wife of Niece 1 Child 1",
-                                "age": 20,
-                                "gender": "Female",
-                                "location": "Mumbai, India",
-                                "photo": "https://ui-avatars.com/api/?name=wife of Niece 1 Child 1&background=random",
-                                "relation": "wife of Niece 1 Child 1"
-                            },
-                            "children": [
-                                {
-                                    "id": "ni1c1c1",
-                                    "name": "Niece 1 Child 1 Child 1",
-                                    "age": 1,
-                                    "gender": "Male",
-                                    "location": "Dubai, UAE",
-                                    "coords": [
-                                        55.3,
-                                        25.2
-                                    ],
-                                    "photo": "https://ui-avatars.com/api/?name=Niece+one+Child+one+Child+one&background=random",
-                                    "relation": "Niece"
-                                }
-                            ],
-                            "photo": "https://ui-avatars.com/api/?name=Niece+one+Child+one&background=random",
-                            "relation": "Niece"
-                        }
-                    ],
-                    "photo": "https://ui-avatars.com/api/?name=Niece+One&background=random",
-                    "relation": "Niece"
-                }
-            ]
+            "relation_id": 4,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 292,
+            "name": "Richard Gomes",
+            "gender": "m",
+            "dob": null,
+            "mid": 286,
+            "fid": 289,
+            "pids": [
+                777
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Brother",
+            "relation_id": 3,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 314,
+            "name": "Teena Paul",
+            "gender": "f",
+            "dob": null,
+            "mid": 286,
+            "fid": 289,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Sister",
+            "relation_id": 4,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 316,
+            "name": "Jacob Paul",
+            "gender": "m",
+            "dob": null,
+            "mid": 286,
+            "fid": 289,
+            "pids": [
+                333
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Brother",
+            "relation_id": 3,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 333,
+            "name": "Jessie Paul",
+            "gender": "f",
+            "dob": null,
+            "mid": 364,
+            "fid": 327,
+            "pids": [
+                316
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Brother",
+            "relation_id": 3,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 344,
+            "name": "Feeby Paul",
+            "gender": "f",
+            "dob": null,
+            "mid": 286,
+            "fid": 289,
+            "pids": [
+                357
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "http://127.0.0.1:8000/uploads/user-profile/344_images/Q9Zaq70QCeweHzHtgUlRL3eMVZvcW35KYTBLdkh5.jpg",
+            "is_user_added_by_me": 1,
+            "relation": "Sister",
+            "relation_id": 4,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 357,
+            "name": "Jimmy Teros ",
+            "gender": "m",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [
+                344
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Brother-in-law (Sister's Husband)",
+            "relation_id": 39,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 358,
+            "name": "Hector Teros",
+            "gender": "m",
+            "dob": null,
+            "mid": 344,
+            "fid": 357,
+            "pids": [
+                359
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Nephew (Sister's Son)",
+            "relation_id": 37,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 359,
+            "name": "Yamal Hoes",
+            "gender": "f",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [
+                358
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": null,
+            "relation_id": null,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 360,
+            "name": "Kull Hoes",
+            "gender": "m",
+            "dob": null,
+            "mid": 359,
+            "fid": 358,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": null,
+            "relation_id": null,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 287,
+            "name": "Voila Paul",
+            "gender": "m",
+            "dob": null,
+            "mid": 293,
+            "fid": 294,
+            "pids": [
+                33
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Husband",
+            "relation_id": 5,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 294,
+            "name": "Vargas Paul",
+            "gender": "m",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [
+                293
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Father-in-law",
+            "relation_id": 48,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 293,
+            "name": "Laila Paul",
+            "gender": "f",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [
+                294
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Mother-in-law",
+            "relation_id": 49,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 298,
+            "name": "Janie Gomes",
+            "gender": "f",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [
+                287
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": null,
+            "relation_id": null,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 288,
+            "name": "Rony Gomes",
+            "gender": "m",
+            "dob": null,
+            "mid": 33,
+            "fid": 287,
+            "pids": [
+                299
+            ],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Son",
+            "relation_id": 7,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 291,
+            "name": "Lisa Gomes",
+            "gender": "f",
+            "dob": null,
+            "mid": 33,
+            "fid": 287,
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": "Daughter",
+            "relation_id": 8,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 300,
+            "name": "Tony Peterson",
+            "gender": "m",
+            "dob": null,
+            "mid": "",
+            "fid": "",
+            "pids": [],
+            "tags": [
+                "kintree"
+            ],
+            "status": true,
+            "is_system_password": 1,
+            "photo": "",
+            "is_user_added_by_me": 1,
+            "relation": null,
+            "relation_id": null,
+            "is_godfather": false,
+            "has_godfather": false
+        },
+        {
+            "id": 786,
+            "name": "John Doe",
+            "gender": "m",
+            "dob": null,
+            "mid": null,
+            "fid": null,
+            "pids": [
+                326
+            ],
+            "tags": [],
+            "status": true,
+            "is_system_password": 0,
+            "photo": "",
+            "is_user_added_by_me": 0,
+            "relation": "Uncle",
+            "relation_id": null
         }
     ]
 }

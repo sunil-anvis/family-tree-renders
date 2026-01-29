@@ -56,11 +56,23 @@ function showModal(d) {
     modalBody.html(`
     <div class="modal-profile">
         <img src="${d.data.photo}" alt="${d.data.name}" class="modal-image">
+        
+        <div class="modal-content-wrapper">
             <h2 class="modal-name">${d.data.name}</h2>
-            <p class="modal-info">${d.data.relation} &bull; ${d.data.size ? 'Family Size: ' + d.data.size : d.data.age + ' yrs'} &bull; ${d.data.gender || 'N/A'}</p>
-            <p class="modal-location">&#x1F4CD; ${d.data.location || 'Unknown'}</p>
+            <p class="modal-info">
+                ${d.data.relation} <span style="color:var(--neon-cyan)">•</span> 
+                ${d.data.size ? 'Family Size: ' + d.data.size : (d.data.age ? d.data.age + ' years' : 'Age N/A')} 
+                <span style="color:var(--neon-cyan)">•</span> ${d.data.gender === 'm' ? 'Male' : (d.data.gender === 'f' ? 'Female' : 'N/A')}
+            </p>
+            
+            <p class="modal-location">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
+                ${d.data.location || 'Location Unknown'}
+            </p>
+
             ${isVerticalView ? '<button class="trace-btn" id="trace-path-btn">Trace Path from Me</button>' : ''}
         </div>
+    </div>
 `);
     modal.style("pointer-events", "all")
         .transition().duration(200)
@@ -184,408 +196,11 @@ function showModal(d) {
 let currentTreeRoot = null;
 
 // State
-let currentView = 'globe'; // 'globe' or 'tree'
+
+let currentView = 'vertical-tree'; // 'tree' or 'vertical-tree'
 let ancestorMode = false;
-let globeData = { countries: null, states: null, rivers: null, cities: null };
-
-// --- 2. Globe Logic ---
-let projection, path, globeGroup, landGroup, stateGroup, riverGroup, cityGroup, linkGroup, nodeGroup, dragBehavior, zoomBehavior;
-
-function initGlobe() {
-    svg.selectAll("*").remove(); // Clear SVG
-    svg.on(".zoom", null); // Clear global zoom if any
-
-    // Re-create Groups (Order matters for layering)
-    // 1. Set Background for Globe View (Space Galaxy)
-    svg.style("background", "radial-gradient(circle at center, #02111b 0%, #000000 100%)");
-
-    globeGroup = svg.append("g");  // Water + Graticules
-    landGroup = svg.append("g");   // Landmasses (Countries)
-    stateGroup = svg.append("g");  // States/Provinces
-    riverGroup = svg.append("g");  // Rivers
-    linkGroup = svg.append("g");   // Links
-
-    // Cities should be above land/rivers but below nodes
-    cityGroup = svg.append("g");   // Cities
-
-    nodeGroup = svg.append("g");   // Family Nodes
-
-    // Projection Setup
-    projection = d3.geoOrthographic()
-        .scale(300)
-        .center([0, 0])
-        .rotate([-70, -20])
-        .translate([width / 2, height / 2]);
-
-    path = d3.geoPath().projection(projection);
-    const graticule = d3.geoGraticule();
-
-    // Background Sphere (Water)
-    globeGroup.append("path")
-        .datum({ type: "Sphere" })
-        .attr("class", "globe-water")
-        .attr("d", path)
-        .attr("fill", "#0077be") // Ocean Blue
-        .attr("stroke", "#005E99")
-        .attr("stroke-width", 1);
-
-    // Graticules
-    globeGroup.append("path")
-        .datum(graticule)
-        .attr("class", "globe-graticule")
-        .attr("d", path)
-        .attr("fill", "none")
-        .attr("stroke", "#ffffff")
-        .attr("stroke-width", 0.3)
-        .attr("stroke-opacity", 0.2);
-
-    // Initial Loading State
-    const loadingText = svg.append("text")
-        .attr("x", width / 2)
-        .attr("y", height / 2)
-        .attr("text-anchor", "middle")
-        .attr("fill", "white")
-        .style("font-size", "20px")
-        .text("Loading Detailed Maps...");
-
-    // Data Fetching
-    if (globeData.countries && globeData.states && globeData.rivers && globeData.cities) {
-        loadingText.remove();
-        renderLayers();
-        autoZoomToFamily();
-    } else {
-        Promise.all([
-            // Countries (Base)
-            d3.json("https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson"),
-            // States (Admin 1 - 10m)
-            d3.json("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson"),
-            // Rivers (10m)
-            d3.json("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson"),
-            // Cities (Populated Places - 10m)
-            d3.json("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_populated_places.geojson")
-        ]).then(([countries, states, rivers, cities]) => {
-            globeData = { countries, states, rivers, cities };
-            loadingText.remove();
-            renderLayers();
-            autoZoomToFamily();
-        }).catch(err => {
-            console.error("Map load failed", err);
-            loadingText.text("Failed to load maps.");
-        });
-    }
-
-    function renderLayers() {
-        // 1. Countries
-        const countryFeatures = globeData.countries.features || globeData.countries;
-        landGroup.selectAll(".globe-land")
-            .data(countryFeatures)
-            .enter().append("path")
-            .attr("class", "globe-land")
-            .attr("d", path)
-            .attr("fill", "#2d6a4f") // Earth Green
-            .attr("stroke", "#40916c")
-            .attr("stroke-width", 0.5);
-
-        // Country Labels (Base Layer)
-        landGroup.selectAll(".country-label")
-            .data(countryFeatures)
-            .enter().append("text")
-            .attr("class", "country-label")
-            .attr("text-anchor", "middle")
-            .style("font-size", "14px")
-            .style("font-weight", "bold")
-            .style("font-family", "sans-serif")
-            .style("fill", "#fff")
-            .style("opacity", 0.5)
-            .style("pointer-events", "none")
-            .text(d => d.properties.name)
-            .style("display", "none");
-
-        // 2. States (Initially empty/hidden handled by updateGlobe, but we render DOM elements here)
-        stateGroup.selectAll(".globe-state")
-            .data(globeData.states.features)
-            .enter().append("path")
-            .attr("class", "globe-state")
-            .attr("d", path)
-            .attr("fill", "none")
-            .attr("stroke", "#ffffff")
-            .attr("stroke-width", 0.3)
-            .attr("stroke-opacity", 0.3)
-            .style("display", "none"); // Hidden by default
-
-        // 3. Rivers
-        riverGroup.selectAll(".globe-river")
-            .data(globeData.rivers.features)
-            .enter().append("path")
-            .attr("class", "globe-river")
-            .attr("d", path)
-            .attr("fill", "none")
-            .attr("stroke", "#4CC9F0") // River Blue
-            .attr("stroke-width", 0.5)
-            .style("display", "none"); // Hidden by default
-
-        // 4. Cities
-        // Filter to reasonable subset to avoid DOM explosion before culling loop
-        // We'll render them all but hide them
-        cityGroup.selectAll(".globe-city")
-            .data(globeData.cities.features)
-            .enter().append("circle")
-            .attr("class", "globe-city")
-            .attr("r", 1) // Tiny dots
-            .attr("fill", "#fff")
-            .style("opacity", 0.8)
-            .style("display", "none");
-
-        cityGroup.selectAll(".city-label")
-            .data(globeData.cities.features)
-            .enter().append("text")
-            .attr("class", "city-label")
-            .attr("text-anchor", "start")
-            .attr("dx", 3)
-            .attr("dy", 1)
-            .style("font-size", "6px")
-            .style("font-family", "sans-serif")
-            .style("fill", "#ddd")
-            .style("pointer-events", "none")
-            .text(d => d.properties.NAME)
-            .style("display", "none");
-    }
-
-    // Process Hierarchy for Globe Nodes (On top of everything)
-    const root = d3.hierarchy(familyData);
-    const nodes = root.descendants();
-    const links = root.links();
-
-    // Links
-    const linkElements = linkGroup.selectAll(".geo-link")
-        .data(links)
-        .enter().append("path")
-        .attr("class", "geo-link")
-        .attr("fill", "none")
-        .attr("stroke", "#FFD700")
-        .attr("stroke-width", 1.5)
-        .attr("stroke-opacity", 0.6);
-
-    // Nodes
-    const nodeElements = nodeGroup.selectAll(".geo-node")
-        .data(nodes)
-        .enter().append("g")
-        .attr("class", "geo-node")
-        .style("cursor", "pointer")
-        .on("click", (event, d) => {
-            event.stopPropagation();
-            showModal(d);
-        });
-
-    nodeElements.append("circle")
-        .attr("r", d => d.data.isMe ? 8 : 6)
-        .classed("heartbeat", d => d.data.isMe)
-        .attr("fill", d => d.data.isMe ? "#FFD700" : "#ff0000")
-        .attr("stroke", "#fff")
-        .attr("stroke-width", 2);
-
-    nodeElements.append("text")
-        .attr("y", -10)
-        .attr("text-anchor", "middle")
-        .style("fill", "white")
-        .style("font-size", "12px")
-        .style("font-weight", "bold")
-        .style("text-shadow", "0 2px 4px black")
-        .style("font-family", "sans-serif")
-        .text(d => d.data.name);
-
-    // Update Function
-    function updateGlobe() {
-        if (!globeData.countries) return;
-
-        const currentPath = d3.geoPath().projection(projection);
-        const center = projection.invert([width / 2, height / 2]);
-        const scale = projection.scale();
-
-        // 1. Base Globe & Countries
-        globeGroup.selectAll("path").attr("d", currentPath);
-
-        if (landGroup.selectAll("path").size() > 0) {
-            landGroup.selectAll("path").attr("d", currentPath);
-
-            // Country Labels (Always calculate pos, visibility depends on angle)
-            landGroup.selectAll(".country-label")
-                .each(function (d) {
-                    const el = d3.select(this);
-                    const centroid = d3.geoCentroid(d);
-                    const dist = d3.geoDistance(center, centroid);
-
-                    if (dist > 1.57) {
-                        el.style("display", "none");
-                    } else {
-                        const coords = projection(centroid);
-                        if (coords) {
-                            el.attr("transform", `translate(${coords[0]}, ${coords[1]})`);
-                            // Fade out countries when zoomed in to let Cities shine?
-                            // Keep them for context.
-                            el.style("display", "block");
-                        }
-                    }
-                });
-        }
-
-        // 2. States (LOD: Scale > 400)
-        if (stateGroup.selectAll("path").size() > 0) {
-            if (scale > 400) {
-                stateGroup.selectAll("path")
-                    .style("display", null) // Show
-                    .attr("d", currentPath);
-            } else {
-                stateGroup.selectAll("path").style("display", "none");
-            }
-        }
-
-        // 3. Rivers (LOD: Scale > 800)
-        if (riverGroup.selectAll("path").size() > 0) {
-            if (scale > 800) {
-                riverGroup.selectAll("path")
-                    .style("display", null)
-                    .attr("d", currentPath);
-            } else {
-                riverGroup.selectAll("path").style("display", "none");
-            }
-        }
-
-        // 4. Cities (LOD: Scale > 1000)
-        if (cityGroup.selectAll("circle").size() > 0) {
-            if (scale > 1000) {
-                cityGroup.selectAll(".globe-city")
-                    .each(function (d) {
-                        const el = d3.select(this);
-                        // Points are easy: coords are in geometry
-                        const coords = d.geometry.coordinates;
-                        const dist = d3.geoDistance(center, coords);
-
-                        // Strict clipping + Zoom culling (hide small cities if not super zoomed?)
-                        // For now, just backface culling
-                        if (dist > 1.57) {
-                            el.style("display", "none");
-                        } else {
-                            const p = projection(coords);
-                            if (p) {
-                                el.attr("cx", p[0]).attr("cy", p[1]);
-                                el.style("display", "block");
-                            }
-                        }
-                    });
-
-                cityGroup.selectAll(".city-label")
-                    .each(function (d) {
-                        const el = d3.select(this);
-                        const coords = d.geometry.coordinates;
-                        const dist = d3.geoDistance(center, coords);
-
-                        if (dist > 1.57) {
-                            el.style("display", "none");
-                        } else {
-                            const p = projection(coords);
-                            if (p) {
-                                el.attr("x", p[0]).attr("y", p[1]);
-                                // Show label only if it's a major city OR very high zoom
-                                // d.properties.SCALERANK can help (lower is bigger)
-                                const rank = d.properties.SCALERANK || 10;
-                                if (scale > 3000 || rank < 3) {
-                                    el.style("display", "block");
-                                } else {
-                                    el.style("display", "none");
-                                }
-                            }
-                        }
-                    });
-            } else {
-                cityGroup.selectAll(".globe-city").style("display", "none");
-                cityGroup.selectAll(".city-label").style("display", "none");
-            }
-        }
 
 
-        // Nodes & Links (Always visible if front-facing)
-        linkElements.attr("d", d => {
-            const source = d.source.data.coords;
-            const target = d.target.data.coords;
-            return currentPath({
-                type: "LineString",
-                coordinates: [source, target]
-            });
-        });
-
-        nodeElements.attr("transform", d => {
-            const coords = projection(d.data.coords);
-            return coords ? `translate(${coords[0]}, ${coords[1]})` : "translate(0,0)";
-        });
-
-        nodeElements.style("display", d => {
-            const dist = d3.geoDistance(center, d.data.coords);
-            return dist > 1.57 ? "none" : "block";
-        });
-    }
-
-    // Interaction
-    dragBehavior = d3.drag()
-        .on("drag", (event) => {
-            const rotate = projection.rotate();
-            const k = 75 / projection.scale();
-            projection.rotate([
-                rotate[0] + event.dx * k,
-                rotate[1] - event.dy * k
-            ]);
-            updateGlobe();
-        });
-
-    zoomBehavior = d3.zoom()
-        .scaleExtent([200, 10000]) // Allow SUPER deep zoom (10k)
-        .on("zoom", (event) => {
-            projection.scale(event.transform.k);
-            updateGlobe();
-        });
-
-    svg.call(dragBehavior);
-    svg.call(zoomBehavior).call(zoomBehavior.transform, d3.zoomIdentity.scale(projection.scale()));
-
-    // Zoom Controls Functionality
-    d3.select("#zoom-in").on("click", () => {
-        svg.transition().duration(500).call(zoomBehavior.scaleBy, 1.5);
-    });
-
-    d3.select("#zoom-out").on("click", () => {
-        svg.transition().duration(500).call(zoomBehavior.scaleBy, 0.66);
-    });
-
-
-    function autoZoomToFamily() {
-        // Collect all coordinates
-        const coords = [];
-        const traverse = (node) => {
-            if (node.coords) coords.push(node.coords);
-            if (node.children) node.children.forEach(traverse);
-        };
-        traverse(familyData);
-
-        if (coords.length === 0) return;
-
-        // Calculate Centroid
-        const center = d3.geoCentroid({
-            type: "MultiPoint",
-            coordinates: coords
-        });
-
-        // Rotate to center
-        projection.rotate([-center[0], -center[1]]);
-
-        // Super Zoom to show details!
-        const targetScale = 2500; // Deep zoom to see cities
-        projection.scale(targetScale);
-
-        // Update view
-        svg.call(zoomBehavior.transform, d3.zoomIdentity.scale(targetScale));
-        updateGlobe();
-    }
-}
 
 // --- 3. Tree Logic ---
 function initTree() {
@@ -602,6 +217,41 @@ function initTree() {
     // Tree Layout
     // Create a group for the tree to support Zoom/Pan
     const g = svg.append("g").attr("transform", `translate(${width / 2}, 50)`);
+
+    // --- SVG DEFINITIONS (Gradients/Filters) ---
+    const defs = svg.append("defs");
+
+    // Card Gradient (Neon Dark)
+    const cardGradient = defs.append("linearGradient")
+        .attr("id", "card-gradient")
+        .attr("x1", "0%")
+        .attr("y1", "0%")
+        .attr("x2", "100%")
+        .attr("y2", "100%");
+
+    cardGradient.append("stop")
+        .attr("offset", "0%")
+        .attr("stop-color", "#1a1a2e"); // Dark Blue
+
+    cardGradient.append("stop")
+        .attr("offset", "100%")
+        .attr("stop-color", "#16213e"); // Slightly lighter
+
+    // Glow Filter
+    const filter = defs.append("filter")
+        .attr("id", "neon-glow")
+        .attr("x", "-50%")
+        .attr("y", "-50%")
+        .attr("width", "200%")
+        .attr("height", "200%");
+
+    filter.append("feGaussianBlur")
+        .attr("stdDeviation", "2.5")
+        .attr("result", "coloredBlur");
+
+    const feMerge = filter.append("feMerge");
+    feMerge.append("feMergeNode").attr("in", "coloredBlur");
+    feMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
     const root = d3.hierarchy(familyData);
 
@@ -728,6 +378,7 @@ function initTree() {
 
     // Render Card (Reusable function?)
     const renderCard = (selection, data, isSpouse = false) => {
+        const truncate = (str, n) => (str && str.length > n) ? str.slice(0, n - 3) + "..." : str;
         const xOffset = isSpouse ? (cardWidth + 20) : 0;
 
         const grp = selection.append("g")
@@ -771,7 +422,6 @@ function initTree() {
             .attr("fill", "none")
             .attr("stroke", data.isMe ? "#FFD700" : "#4ecca3")
             .attr("stroke-width", data.isMe ? 4 : 1.5);
-
         // Text Group
         const textGroup = grp.append("g")
             .attr("transform", `translate(${- cardWidth / 2 + 60}, 0)`);
@@ -779,11 +429,15 @@ function initTree() {
         textGroup.append("text")
             .attr("class", "tree-card-name")
             .attr("y", -2)
+            .text(truncate(data.name, 15))
+            .append("title") // Tooltip
             .text(data.name);
 
         textGroup.append("text")
             .attr("class", "tree-card-relation")
             .attr("y", 12)
+            .text(truncate(data.relation || "", 20))
+            .append("title") // Tooltip for relation
             .text(data.relation || "");
 
         // If it's a spouse, maybe link graphically with a line?
@@ -820,6 +474,7 @@ function initTree() {
 // --- 4. Fan Logic ---
 // --- 4. Fan Logic ---
 function initFan(startNodeId = null) {
+    console.log("initFan called with startNodeId:", startNodeId);
     // 1. Update Dimensions on Init (Fixes centering if resized)
     width = window.innerWidth;
     height = window.innerHeight;
@@ -837,35 +492,7 @@ function initFan(startNodeId = null) {
     // --- 1. Define Extra Data (Virtual Nodes for Fan View) ---
     // These are not in the main tree but needed for the "Me-centric" view
     const extraNodes = [
-        // Mother's Side
-        /* Moved Mother to Spouse of Father */
-        { id: "mg1", name: "Grandmother", age: 75, gender: "Female", location: "Mumbai, India", photo: "https://ui-avatars.com/api/?name=Grand+Mother&background=random", relation: "Maternal Grandmother" },
-        { id: "mgf1", name: "Grandfather", age: 80, gender: "Male", location: "Mumbai, India", photo: "https://ui-avatars.com/api/?name=Grand+Father&background=random", relation: "Maternal Grandfather" },
-        { id: "mu1", name: "Mat Uncle", age: 50, gender: "Male", location: "Pune, India", photo: "https://ui-avatars.com/api/?name=Maternal+Uncle&background=random", relation: "Maternal Uncle" },
-        { id: "ma1", name: "Mat Aunt", age: 45, gender: "Female", location: "Delhi, India", photo: "https://ui-avatars.com/api/?name=Maternal+Aunt&background=FF69B4&color=fff", relation: "Maternal Aunt" },
-        // Cousins from Mother's side
-        // Cousins from Mother's side
-        { id: "mc1", name: "Mat Cousin", age: 20, gender: "Male", location: "Pune, India", photo: "https://ui-avatars.com/api/?name=Mat+Cousin&background=random", relation: "Cousin" },
-        // Uneven Additions (Ring 3)
-        { id: "mc2", name: "Mat Cousin 2", age: 18, gender: "Female", location: "Delhi, India", photo: "https://ui-avatars.com/api/?name=Mat+Cousin+2&background=random", relation: "Cousin" },
-        { id: "mu_wife", name: "Mat Aunt In Law", age: 45, gender: "Female", location: "Pune, India", photo: "https://ui-avatars.com/api/?name=Aunt+Law&background=random", relation: "Aunt-in-Law" },
-
-        // Brother's Side
-        { id: "sil1", name: "Sister-in-Law", age: 22, gender: "Female", location: "London, UK", photo: "https://ui-avatars.com/api/?name=Sis+In+Law&background=FF69B4&color=fff", relation: "Sister-in-Law" },
-        { id: "nep1", name: "Nephew", age: 2, gender: "Male", location: "London, UK", photo: "https://ui-avatars.com/api/?name=Nephew&background=random", relation: "Nephew" },
-        // Uneven (Ring 3)
-        { id: "sil_dad", name: "Sarah's Dad", age: 55, gender: "Male", location: "London, UK", photo: "https://ui-avatars.com/api/?name=Sarah+Dad&background=random", relation: "In-Law" },
-
-        // Sister's Side
-        { id: "bil1", name: "Brother-in-Law", age: 24, gender: "Male", location: "London, UK", photo: "https://ui-avatars.com/api/?name=Bro+In+Law&background=random", relation: "Brother-in-Law" },
-        { id: "nie1", name: "Niece", age: 1, gender: "Female", location: "Dubai, UAE", photo: "https://ui-avatars.com/api/?name=Niece&background=FF69B4&color=fff", relation: "Niece" },
-        // Uneven (Ring 3)
-        { id: "bil_mom", name: "John's Mom", age: 50, gender: "Female", location: "Dubai, UAE", photo: "https://ui-avatars.com/api/?name=John+Mom&background=random", relation: "In-Law" },
-        { id: "bil_bro", name: "John's Bro", age: 20, gender: "Male", location: "Dubai, UAE", photo: "https://ui-avatars.com/api/?name=John+Bro&background=random", relation: "In-Law" },
-
-        // Father's Side Uneven
-        { id: "gr_uncle", name: "Great Uncle", age: 80, gender: "Male", location: "Village", photo: "https://ui-avatars.com/api/?name=Great+Uncle&background=random", relation: "Great Uncle" },
-        /* Paternal Grandmother moved to Spouse of Root */
+        // Legacy extra nodes removed to rely on actual data.json content
     ];
 
     // --- 2. Build Graph (Adjacency List) ---
@@ -924,67 +551,42 @@ function initFan(startNodeId = null) {
 
     // C. Add Custom Edges (The "Me" centering logic)
     // Find "Me"
-    const meNode = mainRoot.descendants().find(d => d.data.name === "Me")?.data;
-    const fatherNode = mainRoot.descendants().find(d => d.data.name === "Father")?.data;
-    const brotherNode = mainRoot.descendants().find(d => d.data.name === "Brother")?.data;
-    const sisterNode = mainRoot.descendants().find(d => d.data.name === "Sister")?.data;
-    // Grandfather linked to Great Uncle
-    const grandFatherNode = mainRoot.descendants().find(d => d.data.name === "Grandfather")?.data;
 
+    // Find "Me"
+    const meNode = mainRoot.descendants().find(d => d.data.isMe || d.data.relation === "Myself")?.data;
+    const meId = meNode ? meNode.id : "root";
 
-    if (meNode) {
-        // Me <-> Mother
-        addEdge(meNode.id, "m1"); // Mother
-    }
+    console.log("DEBUG: Fan View Init - meNode:", meNode);
 
-    // Mother Setup
-    // Mother <-> Father (Spouses)
-    if (fatherNode) addEdge("m1", fatherNode.id);
-    // Mother <-> Parents (Maternal Grandparents)
-    addEdge("m1", "mg1");
-    addEdge("m1", "mgf1");
-    // Mother <-> Siblings (Maternal Uncle/Aunt)
-    addEdge("m1", "mu1");
-    addEdge("m1", "ma1");
-    // Maternal Uncle <-> Mat Cousin
-    addEdge("mu1", "mc1");
-    addEdge("mu1", "mu_wife"); // Wife
-    // Maternal Aunt <-> Mat Cousin 2
-    addEdge("ma1", "mc2");
+    // Helper to find by strict relation text
+    const findByRel = (rel) => mainRoot.descendants().find(d => d.data.relation === rel)?.data;
+    const findBySimilarRel = (rel) => mainRoot.descendants().find(d => d.data.relation && d.data.relation.includes(rel))?.data;
 
+    const fatherNode = findByRel("Father");
+    const motherNode = findByRel("Mother");
 
-    // Brother Link
-    if (brotherNode) {
-        addEdge(brotherNode.id, "sil1"); // Wife
-        addEdge(brotherNode.id, "nep1"); // Child
-        addEdge("sil1", "sil_dad"); // Wife's Dad (Ring 3)
-    }
+    console.log("DEBUG: Fan View Init - fatherNode:", fatherNode);
+    console.log("DEBUG: Fan View Init - motherNode:", motherNode);
 
-    // Sister <-> Brother-in-Law
-    if (sisterNode) {
-        addEdge(sisterNode.id, "bil1"); // Husband
-        addEdge(sisterNode.id, "nie1"); // Child
-        addEdge("bil1", "bil_mom"); // Husband's Mom (Ring 3)
-        addEdge("bil1", "bil_bro"); // Husband's Brother (Ring 3)
-    }
+    // Optional / Extra context nodes (if they exist in data)
+    const brotherNode = findByRel("Brother");
+    const sisterNode = findByRel("Sister");
+    const grandFatherNode = findByRel("Grandfather") || findByRel("Grandfather(Nana)");
+    // Note: data.json might have specific relations like "Grandfather(Nana)" vs "Grandfather"
 
-    // Father Side
-    if (grandFatherNode) {
-        addEdge(grandFatherNode.id, "gr_uncle"); // Sibling
-    }
-    // Father <-> Paternal Grandmother (Already Handled by Spouse Logic above)
-    // Removed old manual link code
+    // We just need to ensure graph connectivity.
 
-
-
-
-    // --- 3. BFS to Build Hierarchy from "Me" ---
-    // Start BFS from "Me" or selected Start Node
-    const rootId = startNodeId || (ancestorMode ? "root" : "root");
+    const rootId = startNodeId || (meNode ? meNode.id : "root");
     const rootNode = allNodesMap.get(rootId);
+
+    console.log("DEBUG: Fan View Init - rootId:", rootId, "rootNode:", rootNode);
 
     if (!rootNode) {
         console.error("Fan Root not found:", rootId);
+        // Fallback: If no root found, try to render *something* (e.g. main tree root)
+        if (familyData) {
+            console.warn("Falling back to familyData root");
+        }
         return;
     }
 
@@ -1015,16 +617,15 @@ function initFan(startNodeId = null) {
             }
         });
 
-        // Extra Nodes: Manually defined
+        // Extra Nodes check removed
+
+        // Paternal Line (Ancestors)
+        // Me -> Father
         // Me -> Mother
-        if (meNode) {
+        if (meNode && motherNode) {
             if (!ancestorAdj.has(meNode.id)) ancestorAdj.set(meNode.id, []);
-            ancestorAdj.get(meNode.id).push("m1");
+            ancestorAdj.get(meNode.id).push(motherNode.id);
         }
-        // Mother -> Grandparents
-        if (!ancestorAdj.has("m1")) ancestorAdj.set("m1", []);
-        ancestorAdj.get("m1").push("mg1");
-        ancestorAdj.get("m1").push("mgf1");
 
         // Paternal Line (Ancestors)
         // Me -> Father
@@ -1143,15 +744,15 @@ function initFan(startNodeId = null) {
         } else if (depth === 1) {
             // Inner Ring: Tangential text, stacked lines. 
             // Needs height for ~3 lines of text.
-            required = Math.max(BASE_DEPTH, 75);
+            required = Math.max(BASE_DEPTH, 65); // Reduced from 75
         } else {
             // Outer Rings: Radial text. Length matters!
-            const nameLen = (d.data.name.length) * CHAR_WIDTH;
+            const nameLen = (d.data.name.length) * 5; // Reduced multiplier from 6.5
             // Relation usually adds ~20-30px if brief, or more. 
             // Let's add padding + relation estimate
-            const relLen = (d.data.relation?.length || 0) * CHAR_WIDTH * 0.7; // smaller font
+            const relLen = (d.data.relation?.length || 0) * 5 * 0.7; // smaller font
             // Total radial length required
-            required = Math.max(nameLen, relLen) + 30; // 30px padding
+            required = Math.max(nameLen, relLen) + 20; // Reduced padding
         }
 
         // Update max required for this ring
@@ -1182,8 +783,15 @@ function initFan(startNodeId = null) {
     fanRoot.eachBefore(d => {
         // Ancestor Mode Split Override (Root Level)
         if (ancestorMode && d.depth === 0 && d.children) {
-            const father = d.children.find(c => c.data.id === 'f1' || c.data.name.includes('Father'));
-            const mother = d.children.find(c => c.data.id === 'm1' || c.data.name.includes("Mother"));
+            // Find Father and Mother in children of "Me" (which are actually parents in graph)
+            // Using IDs from our lookup earlier would be ideal, but d.children are new nodes.
+            // We match by ID.
+
+            const fatherId = fatherNode ? fatherNode.id : null;
+            const motherId = motherNode ? motherNode.id : null;
+
+            const father = d.children.find(c => c.data.id === fatherId);
+            const mother = d.children.find(c => c.data.id === motherId);
 
             // Father: Top Semicircle (-PI/2 to PI/2)
             if (father) {
@@ -1279,7 +887,9 @@ function initFan(startNodeId = null) {
             paths.style("cursor", "pointer")
                 .on("click", (event, d) => {
                     event.stopPropagation();
+                    console.log("Fan Segment Clicked:", d.data.name, "Depth:", d.depth, "ID:", d.data.id);
                     if (d.depth === 4) {
+                        console.log("Expanding tree at:", d.data.id);
                         initFan(d.data.id);
                     } else {
                         showModal(d.data);
@@ -1337,21 +947,32 @@ function initFan(startNodeId = null) {
 
             el.append("text")
                 .text(d.data.name)
-                .attr("y", 5)
-                .style("font-size", "14px") // Controlled small size
+                .attr("y", 4)
+                .style("font-size", "12px") // Reduced from 14px
                 .style("font-weight", "bold");
             return;
         }
 
         // Expand Button Text
         if (d.depth === 4) {
+            // Calculate true centroid for text placement
+            // The transform above might be off for the + icon if d.x0/x1 are weird
+
+            // Ensure it's not rotated weirdly for a symbol
+            el.attr("transform", function () {
+                const centroid = arc.centroid(d);
+                return `translate(${centroid[0]}, ${centroid[1]})`;
+            });
+
             el.attr("text-anchor", "middle")
                 .style("pointer-events", "none");
+
             el.append("text").text("+")
-                .attr("y", 5)
-                .style("font-size", "20px")
+                .attr("dy", "0.35em") // Vertically center
+                .style("font-size", "16px") // Adjusted size
                 .style("font-weight", "bold")
-                .style("fill", "white");
+                .style("fill", "white")
+                .style("pointer-events", "none");
             return;
         }
 
@@ -1366,23 +987,26 @@ function initFan(startNodeId = null) {
         // Name
         el.append("text")
             .text(name)
-            .attr("y", -5)
-            .style("font-size", d.depth === 1 ? "12px" : "10px")
-            .style("font-weight", "bold");
+            .attr("y", -4)
+            .style("font-size", d.depth === 1 ? "8px" : "6px") // Reduced from 10px/8px
+            .style("font-weight", "bold")
+            .style("pointer-events", "none");
 
         // Relation
         if (d.depth === 1) {
-            el.select("text").attr("y", -8);
+            el.select("text").attr("y", -5);
             el.append("text").text(relationText)
-                .attr("y", 8)
-                .style("font-size", "9px");
+                .attr("y", 5)
+                .style("font-size", "6px")
+                .style("pointer-events", "none"); // Reduced from 8px
         } else {
             // Simplify text for outer rings
             const words = name.split(" ");
             el.append("text").text(relationText)
-                .attr("y", 7)
-                .style("font-size", "8px")
-                .style("fill", "#444");
+                .attr("y", 5)
+                .style("font-size", "5px") // Reduced from 7px
+                .style("fill", "#444")
+                .style("pointer-events", "none");
         }
     });
 
@@ -1397,7 +1021,8 @@ function initFan(startNodeId = null) {
         .call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
 
     // Add "Back" button if we are deep (not at true root)
-    if (startNodeId && startNodeId !== "root" && startNodeId !== "root") {
+    // Add "Back" button if we are deep (not at true root)
+    if (startNodeId && startNodeId !== meId && startNodeId !== "root") {
         const backBtn = svg.append("g")
             .attr("transform", `translate(50, 50)`)
             .style("cursor", "pointer")
@@ -2330,9 +1955,7 @@ function initVerticalTree() {
 
 function switchView(view) {
     currentView = view;
-    if (view === "globe") {
-        initGlobe();
-    } else if (view === "tree") {
+    if (view === "tree") {
         initTree();
     } else if (view === "vertical-tree") {
         initVerticalTreeV2();
@@ -2386,9 +2009,7 @@ window.addEventListener("resize", () => {
     height = window.innerHeight;
     svg.attr("width", width).attr("height", height);
 
-    if (currentView === 'globe') {
-        initGlobe();
-    } else if (currentView === 'tree') {
+    if (currentView === 'tree') {
         initTree();
     } else if (currentView === 'vertical-tree') {
         initVerticalTreeV2();
@@ -2637,6 +2258,7 @@ function initVerticalTreeV2() {
         });
 
     const renderVCard = (selection, data, isSpouse = false) => {
+        const truncate = (str, n) => (str && str.length > n) ? str.slice(0, n - 3) + "..." : str;
         const yOffset = isSpouse ? (cardHeight + 20) : 0; // Fixed gap
         const grp = selection.append("g")
             .attr("transform", `translate(0, ${yOffset})`);
@@ -2648,6 +2270,7 @@ function initVerticalTreeV2() {
             .attr("width", cardWidth)
             .attr("height", cardHeight)
             .attr("rx", 10)
+            .attr("fill", "url(#card-gradient)") // Use SVG Gradient
             .attr("class", "tree-card-bg");
 
         const clipId = `vclip-${data.id}`;
@@ -2681,11 +2304,15 @@ function initVerticalTreeV2() {
         textGroup.append("text")
             .attr("class", "tree-card-name")
             .attr("y", -2)
+            .text(truncate(data.name, 15))
+            .append("title")
             .text(data.name);
 
         textGroup.append("text")
             .attr("class", "tree-card-relation")
             .attr("y", 12)
+            .text(truncate(data.relation || "", 20))
+            .append("title")
             .text(data.relation);
 
         return grp;
@@ -2767,7 +2394,13 @@ function initVerticalTreeV2() {
 // Initialize App
 // Load Data and Initialize
 d3.json("data.json").then(data => {
-    familyData = data;
+    // Transform data if it's in API format
+    familyData = transformFamilyData(data);
+
+    if (!familyData) {
+        throw new Error("Failed to transform family data");
+    }
+
     initApp();
 
     // Show Success Toast
@@ -2816,3 +2449,4 @@ d3.json("data.json").then(data => {
             <button onclick="location.reload()" style="padding: 10px 20px; cursor: pointer; background: #444; color: white; border: none; margin-top: 10px;">Retry</button>
         `);
 });
+
