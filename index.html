@@ -12,16 +12,27 @@
 
 <body>
     <div id="view-controls">
-        <button class="view-btn" data-view="tree">Tree View</button>
-        <button class="view-btn active" data-view="vertical-tree">Vertical Tree</button>
-        <button class="view-btn" data-view="fan">Fan View</button>
-        <button class="view-btn" data-view="isometric">3D View</button>
-        <div id="fan-controls" style="display: none; margin-left: 10px; align-items: center;">
-            <input type="checkbox" id="ancestor-mode" class="form-check-input" style="margin-right: 5px;">
-            <label for="ancestor-mode"
-                style="color: white; font-family: sans-serif; font-size: 14px; cursor: pointer;">Parents Mode</label>
-        </div>
+    <button class="view-btn" data-view="tree">Tree View</button>
+    <button class="view-btn active" data-view="vertical-tree">Vertical Tree</button>
+    <button class="view-btn" data-view="fan">Fan View</button>
+    <button class="view-btn" data-view="isometric">3D View</button>
+
+    <!-- Family Focus Controls -->
+    <div style="margin-left: 15px; display: flex; gap: 6px;">
+        <button id="my-family" class="btn btn-sm btn-outline-light">My Family</button>
+        <button id="maternal-family" class="btn btn-sm btn-outline-light">Maternal Side</button>
+        <button id="wife-family" class="btn btn-sm btn-outline-light">Wife / External</button>
     </div>
+
+    <div id="fan-controls" style="display: none; margin-left: 10px; align-items: center;">
+        <input type="checkbox" id="ancestor-mode" class="form-check-input" style="margin-right: 5px;">
+        <label for="ancestor-mode"
+            style="color: white; font-family: sans-serif; font-size: 14px; cursor: pointer;">
+            Parents Mode
+        </label>
+    </div>
+</div>
+
 
     <div id="tree-container"></div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>

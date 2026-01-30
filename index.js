@@ -4,6 +4,14 @@ let rawFamilyData; // Store raw flat data for Graph Views (Fan)
 
 // Initialize App
 
+// Helper to get "Me" from raw API data
+function getMeFromRaw() {
+    const list = rawFamilyData?.data || rawFamilyData;
+    if (!Array.isArray(list)) return null;
+    return list.find(p => p.relation === "Myself" || p.relation === "Me");
+}
+
+
 
 function initApp() {
     // Determine initial view based on active button in HTML
@@ -15,52 +23,6 @@ function initApp() {
     // Initial Render
     switchView(currentView);
 }
-
-// Global Re-Root Function
-window.reRootTree = function (targetId) {
-    if (!rawFamilyData) {
-        console.error("No raw data available for re-rooting");
-        return;
-    }
-
-    console.log("Re-rooting tree on:", targetId);
-
-    // Transform data focusing on targetId
-    // This rebuilds the hierarchy with target as the focus (up to their ancestors)
-    familyData = transformFamilyData(rawFamilyData, targetId);
-
-    if (familyData) {
-        console.log("New Tree Root generated:", familyData.name, "ID:", familyData.id);
-    } else {
-        console.error("Failed to re-transform data");
-        return;
-    }
-
-    // Re-render current view (Vertical Tree usually)
-    if (currentView === 'vertical-tree') {
-        initVerticalTree();
-    } else {
-        // For other views (Fan/3D), just initApp or specific init
-        // But re-rooting implies Tree structure change, mostly relevant for Vertical.
-        // Fan/3D use full graph or dynamic traversal anyway.
-        initApp();
-    }
-
-    // Toast
-    const toast = d3.select("body").append("div")
-        .style("position", "fixed")
-        .style("bottom", "20px")
-        .style("left", "50%")
-        .style("transform", "translateX(-50%)")
-        .style("background", "rgba(0, 0, 0, 0.8)")
-        .style("color", "#fff")
-        .style("padding", "10px 20px")
-        .style("border-radius", "20px")
-        .style("z-index", "10000")
-        .text("Showing Tree Root: " + familyData.name);
-
-    setTimeout(() => toast.remove(), 3000);
-};
 
 
 // Global Dimensions
@@ -120,7 +82,6 @@ function showModal(d) {
             ${isVerticalView ? `
                 <div class="modal-actions" style="margin-top:15px; display:flex; gap:10px; flex-wrap:wrap;">
                     <button class="trace-btn" id="trace-path-btn" style="flex:1;">Trace Path from Me</button>
-                    <button class="view-tree-btn" id="view-tree-btn" style="flex:1; background: #444; color:white; border:none; padding:8px; border-radius:15px; cursor:pointer;">View Family Tree</button>
                 </div>
             ` : ''}
         </div>
@@ -136,6 +97,7 @@ function showModal(d) {
         if (traceBtn) {
             traceBtn.addEventListener("click", () => {
                 console.log("Trace button clicked!");
+                console.log("currentTreeRoot:", currentTreeRoot);
                 console.log("Target node data:", d.data);
 
                 if (!currentTreeRoot) {
@@ -156,6 +118,7 @@ function showModal(d) {
 
                 if (!meNode) {
                     console.error("Could not find 'Me' node in tree!");
+                    alert("Could not find 'Myself' in this tree view to trace from.");
                     return;
                 }
 
@@ -190,22 +153,57 @@ function showModal(d) {
 
                 console.log("Link pairs:", Array.from(linkPairs));
 
-                // Trace Visualization Logic...
-                // ... (Existing Trace logic calls)
-                console.log("Animation started - path will trace from Me to", d.data.name);
+                // Close modal first
+                modal.transition().duration(200)
+                    .style("opacity", 0)
+                    .on("end", () => modal.style("pointer-events", "none"));
+
+                // Animate the trace sequentially
+                // Highlight nodes one by one with delay
+                pathNodes.forEach((node, index) => {
+                    setTimeout(() => {
+                        d3.selectAll(".tree-node")
+                            .filter(n => n.data.id === node.data.id)
+                            .classed("trace-active", true)
+                            .select("circle")
+                            .transition()
+                            .duration(300)
+                            .attr("r", 25) // Pulse effect
+                            .transition()
+                            .duration(300)
+                            .attr("r", 21);
+                    }, index * 400); // 400ms delay between each node
+                });
+
+                // Animate links one by one
+                for (let i = 0; i < pathNodes.length - 1; i++) {
+                    const a = pathNodes[i];
+                    const b = pathNodes[i + 1];
+                    const linkKey = `${a.data.id}-${b.data.id}`;
+
+                    setTimeout(() => {
+                        d3.selectAll(".tree-link[data-link-type='main-tree']")
+                            .filter(function (l) {
+                                return linkPairs.has(`${l.source.data.id}-${l.target.data.id}`);
+                            })
+                            .filter(function (l) {
+                                return `${l.source.data.id}-${l.target.data.id}` === linkKey ||
+                                    `${l.target.data.id}-${l.source.data.id}` === linkKey;
+                            })
+                            .classed("trace-active", true)
+                            .transition()
+                            .duration(400)
+                            .attr("stroke-width", 6)
+                            .transition()
+                            .duration(200)
+                            .attr("stroke-width", 4);
+                    }, i * 400 + 200); // Start after the source node, offset by 200ms
+                }
+
             });
         }
 
-        // View Tree Button Handler
-        const viewTreeBtn = document.getElementById("view-tree-btn");
-        if (viewTreeBtn) {
-            viewTreeBtn.addEventListener("click", () => {
-                // Close modal
-                modal.style("opacity", 0).style("pointer-events", "none");
-                // Re-root
-                window.reRootTree(d.data.id);
-            });
-        }
+
     }
 }
 
@@ -2235,44 +2233,10 @@ function initVerticalTreeV2() {
     // Translate slightly right to give space for root
     const g = svg.append("g").attr("transform", `translate(100, ${height / 2})`);
 
-    // --- Data Transformation for Vertical Tree (Grandfather Rooted) ---
-    // 1. Deep Copy
-    const deepMe = JSON.parse(JSON.stringify(familyData));
+    // --- Data Transformation for Vertical Tree ---
+    // The familyData is already transformed by transformFamilyData to be a proper hierarchy.
 
-    // 2. Find Key Nodes
-    const deepFather = deepMe.children.find(d => d.id === 'f1' || d.name === 'Father');
-    const deepBrother = deepMe.children.find(d => d.id === 'c2' || d.name === 'Brother');
-    const deepSister = deepMe.children.find(d => d.id === 'c3' || d.name === 'Sister');
-
-    // Grandfather is child of Father in original data
-    const deepGrandfather = deepFather ? deepFather.children.find(d => d.id === 'gf1' || d.name === 'Grandfather') : null;
-
-    let vTreeRootData = deepMe; // Fallback
-
-    if (deepGrandfather && deepFather) {
-        // 3. Re-link Hierarchy
-
-        // A. Clean up Me (Remove Father, Brother, Sister from Me's children)
-        // Keep any other children Me might have (none in current data, but safeguards)
-        deepMe.children = deepMe.children.filter(d => d.id !== 'f1' && d.id !== 'c2' && d.id !== 'c3');
-
-        // B. Clean up Father (Remove Grandfather from Father's children)
-        deepFather.children = deepFather.children.filter(d => d.id !== 'gf1');
-
-        // C. Clean up Grandfather (Keep Uncles/Aunts, Add Father)
-        // Grandfather already has Uncles/Aunts as children
-        if (!deepGrandfather.children) deepGrandfather.children = [];
-        deepGrandfather.children.push(deepFather);
-
-        // D. Add Me + Siblings to Father
-        if (!deepFather.children) deepFather.children = [];
-        deepFather.children.push(deepMe);
-        if (deepBrother) deepFather.children.push(deepBrother);
-        if (deepSister) deepFather.children.push(deepSister);
-
-        // E. Set New Root
-        vTreeRootData = deepGrandfather;
-    }
+    let vTreeRootData = familyData;
 
     const root = d3.hierarchy(vTreeRootData);
     currentTreeRoot = root; // Store for tracing
@@ -2446,8 +2410,7 @@ function initVerticalTreeV2() {
         .attr("class", "tree-node")
         // Swap X and Y for translation
         .attr("transform", d => `translate(${getX(d)}, ${getY(d)})`)
-        // Cursor style kept, but click removed from here
-        // Click is now handled per-card in renderVCard
+        // Click removed from here to allow individual card clicks
         .style("cursor", "border");
 
     const renderVCard = (selection, data, isSpouse = false) => {
@@ -2541,7 +2504,7 @@ function initVerticalTreeV2() {
             // Check for Spousal Parents (Maternal Grandparents etc.)
             if (d.data.spouse.parents && d.data.spouse.parents.length > 0) {
                 // Render them to the LEFT of the spouse
-                const parentXOffset = -300;
+                const parentXOffset = -600; // Increased spacing further
                 const spouseYOffset = cardHeight + 20; // Relative to Main Node
 
                 const p1 = d.data.spouse.parents[0];
@@ -2590,7 +2553,51 @@ function initVerticalTreeV2() {
     // Center initially (Left side)
     const initialTransform = d3.zoomIdentity.translate(100, height / 2).scale(1);
     svg.call(zoom).call(zoom.transform, initialTransform);
+
 }
+
+// --- 8. Re-Rooting Logic ---
+window.reRootTree = function (targetId) {
+    if (!rawFamilyData) {
+        console.error("No raw data available for re-rooting");
+        return;
+    }
+
+    console.log("Re-rooting tree on:", targetId);
+
+    // Transform data focusing on targetId
+    familyData = transformFamilyData(rawFamilyData, targetId);
+
+    if (!familyData) {
+        console.error("Failed to re-transform data");
+        return;
+    }
+
+    // Re-render current view (Vertical Tree usually)
+    if (currentView === 'vertical-tree') {
+        initVerticalTreeV2();
+    } else {
+        initApp();
+    }
+
+    // Toast
+    const newRootName = familyData.data ? familyData.data.name : familyData.name;
+    const toast = document.createElement("div");
+    toast.className = "toast-notification";
+    toast.textContent = `Showing Tree Root: ${newRootName}`;
+    toast.style.position = "fixed";
+    toast.style.bottom = "20px";
+    toast.style.left = "50%";
+    toast.style.transform = "translateX(-50%)";
+    toast.style.background = "#4ecca3";
+    toast.style.color = "#000";
+    toast.style.padding = "10px 20px";
+    toast.style.borderRadius = "20px";
+    toast.style.zIndex = "10000";
+    toast.style.fontWeight = "bold";
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+};
 
 // Initialize App
 // Load Data and Initialize
@@ -2653,4 +2660,36 @@ d3.json("data.json").then(data => {
             <button onclick="location.reload()" style="padding: 10px 20px; cursor: pointer; background: #444; color: white; border: none; margin-top: 10px;">Retry</button>
         `);
 });
+
+// ─────────────────────────────────────
+// FAMILY VIEW SWITCHING (ANCESTOR MODE)
+// ─────────────────────────────────────
+
+document.getElementById("my-family")?.addEventListener("click", () => {
+    familyData = transformFamilyData(rawFamilyData);
+    switchView(currentView); // re-render current view
+});
+
+document.getElementById("maternal-family")?.addEventListener("click", () => {
+    const me = getMeFromRaw();
+    if (!me || !me.mid) {
+        alert("Maternal family not available");
+        return;
+    }
+
+    familyData = transformFamilyData(rawFamilyData, me.mid);
+    switchView(currentView);
+});
+
+document.getElementById("wife-family")?.addEventListener("click", () => {
+    const me = getMeFromRaw();
+    if (!me || !me.pids || !me.pids.length) {
+        alert("Wife / external family not available");
+        return;
+    }
+
+    familyData = transformFamilyData(rawFamilyData, me.pids[0]);
+    switchView(currentView);
+});
+
 
