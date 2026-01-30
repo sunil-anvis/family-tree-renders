@@ -10,7 +10,7 @@
  * - Spouse objects embedded in person objects
  */
 
-function transformApiDataToHierarchy(apiResponse) {
+function transformApiDataToHierarchy(apiResponse, focusId = null) {
     // Extract data array from API response
     const apiData = apiResponse.data || apiResponse;
 
@@ -41,17 +41,38 @@ function transformApiDataToHierarchy(apiResponse) {
         });
     });
 
-    // Step 2: Find root person (the one with relation "Myself")
+    // Step 2: Find root person
     let rootPerson = null;
-    for (const [id, person] of personMap) {
-        if (person.isMe) {
-            rootPerson = person;
-            break;
+
+    if (focusId) {
+        console.log("Transforming with Focus ID:", focusId);
+        // If focusId provided (Re-rooting), find that specific person
+        rootPerson = personMap.get(focusId.toString());
+        if (!rootPerson) {
+            console.warn(`Focus ID ${focusId} not found, falling back to Myself.`);
+            console.log("Map check:", personMap.has(focusId));
+        } else {
+            console.log("Found Focus Person:", rootPerson.name);
+        }
+    }
+
+    // Fallback or Default: Find "Myself"
+    if (!rootPerson) {
+        for (const [id, person] of personMap) {
+            if (person.isMe) {
+                rootPerson = person;
+                break;
+            }
         }
     }
 
     if (!rootPerson) {
-        console.error("Could not find root person (Myself)");
+        // Ultimate fallback: First person in list
+        rootPerson = personMap.values().next().value;
+    }
+
+    if (!rootPerson) {
+        console.error("Could not find any root person");
         return null;
     }
 
@@ -231,10 +252,10 @@ function isApiFormat(data) {
 /**
  * Main transformation function - handles both formats
  */
-function transformFamilyData(data) {
+function transformFamilyData(data, focusId = null) {
     if (isApiFormat(data)) {
-        console.log("Detected API format - transforming to hierarchical structure");
-        return transformApiDataToHierarchy(data);
+        console.log("Detected API format - transforming to hierarchical structure", focusId ? `Focus: ${focusId}` : "");
+        return transformApiDataToHierarchy(data, focusId);
     } else {
         console.log("Detected hierarchical format - using as-is");
         return data;

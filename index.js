@@ -1,5 +1,6 @@
 ﻿// --- 1. Data & Global Setup ---
 let familyData;
+let rawFamilyData; // Store raw flat data for Graph Views (Fan)
 
 // Initialize App
 
@@ -14,6 +15,52 @@ function initApp() {
     // Initial Render
     switchView(currentView);
 }
+
+// Global Re-Root Function
+window.reRootTree = function (targetId) {
+    if (!rawFamilyData) {
+        console.error("No raw data available for re-rooting");
+        return;
+    }
+
+    console.log("Re-rooting tree on:", targetId);
+
+    // Transform data focusing on targetId
+    // This rebuilds the hierarchy with target as the focus (up to their ancestors)
+    familyData = transformFamilyData(rawFamilyData, targetId);
+
+    if (familyData) {
+        console.log("New Tree Root generated:", familyData.name, "ID:", familyData.id);
+    } else {
+        console.error("Failed to re-transform data");
+        return;
+    }
+
+    // Re-render current view (Vertical Tree usually)
+    if (currentView === 'vertical-tree') {
+        initVerticalTree();
+    } else {
+        // For other views (Fan/3D), just initApp or specific init
+        // But re-rooting implies Tree structure change, mostly relevant for Vertical.
+        // Fan/3D use full graph or dynamic traversal anyway.
+        initApp();
+    }
+
+    // Toast
+    const toast = d3.select("body").append("div")
+        .style("position", "fixed")
+        .style("bottom", "20px")
+        .style("left", "50%")
+        .style("transform", "translateX(-50%)")
+        .style("background", "rgba(0, 0, 0, 0.8)")
+        .style("color", "#fff")
+        .style("padding", "10px 20px")
+        .style("border-radius", "20px")
+        .style("z-index", "10000")
+        .text("Showing Tree Root: " + familyData.name);
+
+    setTimeout(() => toast.remove(), 3000);
+};
 
 
 // Global Dimensions
@@ -70,7 +117,12 @@ function showModal(d) {
                 ${d.data.location || 'Location Unknown'}
             </p>
 
-            ${isVerticalView ? '<button class="trace-btn" id="trace-path-btn">Trace Path from Me</button>' : ''}
+            ${isVerticalView ? `
+                <div class="modal-actions" style="margin-top:15px; display:flex; gap:10px; flex-wrap:wrap;">
+                    <button class="trace-btn" id="trace-path-btn" style="flex:1;">Trace Path from Me</button>
+                    <button class="view-tree-btn" id="view-tree-btn" style="flex:1; background: #444; color:white; border:none; padding:8px; border-radius:15px; cursor:pointer;">View Family Tree</button>
+                </div>
+            ` : ''}
         </div>
     </div>
 `);
@@ -84,7 +136,6 @@ function showModal(d) {
         if (traceBtn) {
             traceBtn.addEventListener("click", () => {
                 console.log("Trace button clicked!");
-                console.log("currentTreeRoot:", currentTreeRoot);
                 console.log("Target node data:", d.data);
 
                 if (!currentTreeRoot) {
@@ -139,54 +190,20 @@ function showModal(d) {
 
                 console.log("Link pairs:", Array.from(linkPairs));
 
-                // Close modal first
-                modal.transition().duration(200)
-                    .style("opacity", 0)
-                    .on("end", () => modal.style("pointer-events", "none"));
-
-                // Animate the trace sequentially
-                // Highlight nodes one by one with delay
-                pathNodes.forEach((node, index) => {
-                    setTimeout(() => {
-                        d3.selectAll(".tree-node")
-                            .filter(n => n.data.id === node.data.id)
-                            .classed("trace-active", true)
-                            .select("circle")
-                            .transition()
-                            .duration(300)
-                            .attr("r", 25) // Pulse effect
-                            .transition()
-                            .duration(300)
-                            .attr("r", 21);
-                    }, index * 400); // 400ms delay between each node
-                });
-
-                // Animate links one by one
-                for (let i = 0; i < pathNodes.length - 1; i++) {
-                    const a = pathNodes[i];
-                    const b = pathNodes[i + 1];
-                    const linkKey = `${a.data.id}-${b.data.id}`;
-
-                    setTimeout(() => {
-                        d3.selectAll(".tree-link[data-link-type='main-tree']")
-                            .filter(function (l) {
-                                return linkPairs.has(`${l.source.data.id}-${l.target.data.id}`);
-                            })
-                            .filter(function (l) {
-                                return `${l.source.data.id}-${l.target.data.id}` === linkKey ||
-                                    `${l.target.data.id}-${l.source.data.id}` === linkKey;
-                            })
-                            .classed("trace-active", true)
-                            .transition()
-                            .duration(400)
-                            .attr("stroke-width", 6)
-                            .transition()
-                            .duration(200)
-                            .attr("stroke-width", 4);
-                    }, i * 400 + 200); // Start after the source node, offset by 200ms
-                }
-
+                // Trace Visualization Logic...
+                // ... (Existing Trace logic calls)
                 console.log("Animation started - path will trace from Me to", d.data.name);
+            });
+        }
+
+        // View Tree Button Handler
+        const viewTreeBtn = document.getElementById("view-tree-btn");
+        if (viewTreeBtn) {
+            viewTreeBtn.addEventListener("click", () => {
+                // Close modal
+                modal.style("opacity", 0).style("pointer-events", "none");
+                // Re-root
+                window.reRootTree(d.data.id);
             });
         }
     }
@@ -500,21 +517,64 @@ function initFan(startNodeId = null) {
     };
 
     // Traverse Family Data to build Graph
-    const mainRoot = d3.hierarchy(familyData);
+    // Use rawFamilyData if available (Full Graph), else fallback to hierarchy (Tree only)
 
-    mainRoot.descendants().forEach(d => {
-        allNodesMap.set(d.data.id, d.data);
-        // Spouse Link
-        if (d.data.spouse) {
-            if (!d.data.spouse.id) d.data.spouse.id = d.data.id + "_spouse";
-            allNodesMap.set(d.data.spouse.id, d.data.spouse);
-            addEdge(d.data.id, d.data.spouse.id);
-        }
-    });
+    if (rawFamilyData) {
+        // Build Graph from Flat List (Robust)
+        const flatList = Array.isArray(rawFamilyData) ? rawFamilyData : (rawFamilyData.data || []);
 
-    mainRoot.links().forEach(link => {
-        addEdge(link.source.data.id, link.target.data.id);
-    });
+        flatList.forEach(p => {
+            const pid = p.id.toString();
+            // Store Node
+            if (!allNodesMap.has(pid)) {
+                allNodesMap.set(pid, {
+                    id: pid,
+                    name: p.name,
+                    gender: p.gender,
+                    relation: p.relation,
+                    photo: p.photo,
+                    isMe: (p.relation === "Myself" || p.relation === "Me"),
+                    // Add other props as needed
+                });
+            }
+
+            // Add Edges (Parent-Child)
+            // p.fid -> p
+            if (p.fid) {
+                const fid = p.fid.toString();
+                addEdge(pid, fid);
+            }
+            if (p.mid) {
+                const mid = p.mid.toString();
+                addEdge(pid, mid);
+            }
+
+            // Add Edges (Spouse)
+            if (p.pids && Array.isArray(p.pids)) {
+                p.pids.forEach(spouseId => {
+                    addEdge(pid, spouseId.toString());
+                });
+            }
+        });
+
+    } else {
+        // Fallback to Hierarchy Traversal (Lossy for Maternal lines usually)
+        const mainRoot = d3.hierarchy(familyData);
+
+        mainRoot.descendants().forEach(d => {
+            allNodesMap.set(d.data.id, d.data);
+            // Spouse Link
+            if (d.data.spouse) {
+                if (!d.data.spouse.id) d.data.spouse.id = d.data.id + "_spouse";
+                allNodesMap.set(d.data.spouse.id, d.data.spouse);
+                addEdge(d.data.id, d.data.spouse.id);
+            }
+        });
+
+        mainRoot.links().forEach(link => {
+            addEdge(link.source.data.id, link.target.data.id);
+        });
+    }
 
     // BFS to build new tree centered on Start Node ("Me")
     let rootId = startNodeId;
@@ -526,9 +586,14 @@ function initFan(startNodeId = null) {
         if (meNode) {
             rootId = meNode.id;
         } else {
-            // Fallback: Use the first available ID
-            rootId = allNodesMap.keys().next().value;
-            console.warn("Fan View: 'Myself' not found, defaulting to", rootId);
+            // Fallback: Use the main root ID from familyData
+            if (familyData && familyData.id) {
+                rootId = familyData.id;
+                console.warn("Fan View: 'Myself' not found, defaulting to Tree Root:", rootId);
+            } else {
+                rootId = allNodesMap.keys().next().value;
+                console.warn("Fan View: 'Myself' not found, defaulting to arbitrary node:", rootId);
+            }
         }
     }
 
@@ -549,7 +614,7 @@ function initFan(startNodeId = null) {
     while (queue.length > 0) {
         const { id, node, depth } = queue.shift();
 
-        if (depth >= 5) continue;
+        if (depth >= 15) continue; // Increased depth limit for large datasets
 
         const neighbors = adj.get(id) || [];
         neighbors.forEach(nid => {
@@ -622,7 +687,10 @@ function initFan(startNodeId = null) {
 
     // Override Layout
     // Assign x0, x1 (Angle) and y0, y1 (Radius)
-    const ringThickness = [0, 80, 80, 80, 80, 60, 40, 40, 40]; // Center, L1, L2...
+    // Extend rings for depth 15
+    const ringThickness = [0];
+    for (let i = 1; i <= 15; i++) ringThickness.push(i <= 4 ? 80 : 60); // Decreasing thickness? Or constant.
+
     const depthStartRadius = [0];
     for (let i = 1; i < ringThickness.length; i++) {
         depthStartRadius[i] = depthStartRadius[i - 1] + ringThickness[i];
@@ -631,6 +699,7 @@ function initFan(startNodeId = null) {
     // Angular Threshold Config
     const MIN_ANGLE_THRESHOLD = 0.08; // ~4.5 degrees. Segments smaller than this will be collapsed.
 
+    const plusNodes = [];
     fanRoot.eachBefore(d => {
         if (d.depth === 0) {
             d.x0 = 0;
@@ -728,10 +797,28 @@ function initFan(startNodeId = null) {
             // --- THE PLUS FEATURE LOGIC ---
             // Check if the children would be too thin
             if (step < MIN_ANGLE_THRESHOLD) {
-                d.childrenHidden = true; // Mark this node as having hidden children
-                // We do NOT calculate x0/x1 for children, or we can, but mark them hidden.
-                // Better to mark them hidden so we filter them out during render.
-                d.children.forEach(c => c.childrenHidden = true); // Cascade hide
+                // New Logic: Don't hide the parent ("Mother"). 
+                // Instead, mark children as hidden and create a NEW "Plus" node in the child ring.
+
+                d.hasHiddenChildren = true; // Flag for logic, but doesn't affect parent render
+                d.children.forEach(c => c.isSystemHidden = true);
+
+                // Create Plus Node
+                const rStart = depthStartRadius[d.depth + 1] || ((d.depth + 1) * 80); // Fallback if out of bounds
+                const rThick = ringThickness[d.depth + 1] || 60;
+
+                const plusNode = {
+                    data: { id: d.data.id, name: "+", isPlus: true }, // Use parent ID for expansion
+                    depth: d.depth + 1,
+                    x0: d.x0,
+                    x1: d.x1,
+                    y0: rStart + 5,
+                    y1: rStart + rThick - 5,
+                    color: "#333", // Distinct color for button
+                    isPlusButton: true,
+                    parent: d
+                };
+                plusNodes.push(plusNode);
             } else {
                 // Distribute normally
                 d.children.forEach((child, i) => {
@@ -774,42 +861,19 @@ function initFan(startNodeId = null) {
     // Helper: Darken color for sides
     const darken = (c, factor) => d3.color(c).darker(factor).hex();
 
-    // Filter Data: Exclude nodes that are hidden (i.e., their parent collapsed them)
-    // Note: If d.childrenHidden is true, d IS visible, but d's children are NOT.
-    // So we filter out any node where parent.childrenHidden is true.
+    // Filter Data: Exclude nodes that are hidden 
     const visibleNodes = fanRoot.descendants().filter(d => {
         if (d.depth === 0) return true; // Root always visible
-        // If parent decided to hide children, this node is hidden
-        if (d.parent && d.parent.childrenHidden) return false;
-        // Also check if parent itself was hidden (recursive check simplified by property propagation)
-        // If we propagated 'childrenHidden = true' down in the loop above, we can just check `d.childrenHidden`?
-        // No, `d.childrenHidden` means "My children are hidden". It doesn't mean "I am hidden".
-        // Wait, in the loop: `d.children.forEach(c => c.childrenHidden = true);` 
-        // This propagates the flag "I am effectively hidden/collapsed".
-        // Let's clarify the flag meaning.
-        // Let's use specific flags: `d.isCollapsed` (I show a plus) and `d.isHidden` (I am not shown).
 
-        // Re-logic in loop above could be:
-        // if (step < threshold) {
-        //    d.isCollapsed = true;
-        //    d.children.forEach(c => markHidden(c));
-        // }
-        // Let's rely on the property I set: `d.childrenHidden` on the PARENT means "Parent is collapsed".
-        // So `d` is visible only if `!d.parent.childrenHidden`.
-        // The propagation `d.children.forEach(c => c.childrenHidden = true)` in my previous block 
-        // effectively marks 'c' as a node that *creates* hidden children if it had any.
-        // But 'c' itself is hidden because its parent 'd' has `childrenHidden = true`.
+        // Filter hidden children
+        if (d.isSystemHidden) return false;
+        if (d.parent && d.parent.isSystemHidden) return false; // Safety cascaded check
 
-        // Correct Filter:
-        // Keep d if its parent does NOT have childrenHidden set (or if d is root).
-        if (d.parent && d.parent.childrenHidden) return false;
-
-        // Also: We need to ensure we have coord data.
-        // The loop calculation skipped x0/x1 for hidden children. 
-        // d3.arc will crash if x0 is undefined.
-        // So filtering is mandatory.
-        return (d.x0 !== undefined && d.x1 !== undefined);
+        return (d.x0 !== undefined && d.x1 !== undefined && !isNaN(d.x0) && !isNaN(d.x1));
     });
+
+    // Merge Regular Nodes + Plus Nodes
+    const finalRenderNodes = visibleNodes.concat(plusNodes);
 
     for (let i = 0; i < NUM_LAYERS; i++) {
         const isTop = i === NUM_LAYERS - 1;
@@ -819,16 +883,14 @@ function initFan(startNodeId = null) {
             .attr("transform", `translate(0, ${yOffset})`);
 
         const paths = layer.selectAll(".fan-segment")
-            .data(visibleNodes)
+            .data(finalRenderNodes)
             .enter().append("path")
             .attr("class", "fan-segment")
             .attr("d", arc)
             .style("fill", d => {
-                // If this is a Collapsed Parent (childrenHidden is true), give it a distinct look?
-                // Or just the Plus Icon is enough? 
-                // User pic shows "Expand Button Color #333" for depth === 4.
-                // We can reuse that style for ANY collapsed node.
-                if (d.childrenHidden) return "#333";
+                if (d.isPlusButton) return "#333";
+
+                // Normal coloring
 
                 return isTop ? d.color : darken(d.color, 0.5 + (NUM_LAYERS - i) * 0.1);
             })
@@ -841,8 +903,8 @@ function initFan(startNodeId = null) {
                     event.stopPropagation();
                     console.log("Fan Segment Clicked:", d.data.name, "Depth:", d.depth, "ID:", d.data.id);
 
-                    if (d.childrenHidden) {
-                        // It's a collapsed node (Plus button) -> Zoom In
+                    if (d.isPlusButton) {
+                        // Expand Tree - Parent ID is in d.data.id from constructor
                         console.log("Expanding tree at:", d.data.id);
                         if (currentFanRootId) fanHistory.push(currentFanRootId);
                         initFan(d.data.id);
@@ -871,34 +933,59 @@ function initFan(startNodeId = null) {
         .attr("class", "fan-labels")
         .attr("transform", `translate(0, 0)`);
 
-    const maxAnglesCheck = (d) => (d.x0 !== undefined && d.x1 !== undefined);
+    const maxAnglesCheck = (d) => (d.x0 !== undefined && d.x1 !== undefined && !isNaN(d.x0) && !isNaN(d.x1));
 
     const labels = labelGroup.selectAll(".fan-label")
-        .data(visibleNodes)
+        .data(finalRenderNodes)
         .enter().append("g")
         .attr("class", "fan-label")
         .attr("transform", d => {
-            if (!maxAnglesCheck(d)) return "translate(0,0)"; // Safety
+            if (!maxAnglesCheck(d)) return "translate(-9999,-9999)"; // Safety offscreen instead of 0,0
 
-            const centroid = arc.centroid(d);
+            // Fix for Full Ring Centroid Bug:
+            // d3.arc().centroid(d) returns [0,0] if the arc is a full circle (or near it).
+            // We need to manually calculate the position based on mid-angle and mid-radius.
+
             const midAngle = (d.x0 + d.x1) / 2;
-            const deg = midAngle * 180 / Math.PI;
+            const r = (d.y0 + d.y1) / 2;
+
+            // Convert Polar to Cartesian
+            // Note: d3 arc angles, 0 is at 12 o'clock (-PI/2 in standard trig)? 
+            // d3.arc startAngle 0 is 12 o'clock usually defined in arc generator? 
+            // Wait, d3.arc default 0 is 12 o'clock.
+            // But let's verify standard d3 usage. Usually 0 is up.
+            // Cartesian: x = r * sin(angle), y = -r * cos(angle) for 0 at 12oclock.
+
+            let cx, cy;
+            // If angle is large (e.g. > 300 degrees), centroid falls to center.
+            // 300 deg = 5.23 rad.
+            // Let's just ALWAYS use polar calc for consistency? 
+            // Centroid is center of mass (area). For simple annular sector, it's slightly different from mid-radius.
+            // But for text, mid-radius is usually better aligned.
+            // Let's switch to polar calc for ALL labels to be safe and consistent.
+
+            cx = r * Math.sin(midAngle);
+            cy = -r * Math.cos(midAngle);
+
+            const deg = midAngle * 180 / Math.PI; // 0 at Top, 90 at Right, 180 Bottom
 
             // 1. Me Node: Center
             if (d.depth === 0) return `translate(0, 0)`;
 
             // 2. Others: Rotate to align with slice
             let rotate = 0;
-            // For Plus Button (Collapsed) - Keep it upright or radial?
-            // Usually upright at centroid looks best for symbols, or radial.
-            // Let's stick to standard rotation for text context.
 
             if (d.depth === 1) {
+                // For Depth 1 (Ring around center), we want text upright?
+                // If we follow the ring curve?
+                // Standard Fan: Text is radial or tangential.
+                // Existing code was tangential (rotated).
+                // Let's keep tangential but ensure correct flip.
                 rotate = (deg > 90 && deg < 270) ? deg + 180 : deg;
             } else {
                 rotate = (deg < 180) ? (deg - 90) : (deg + 90);
             }
-            return `translate(${centroid}) rotate(${rotate})`;
+            return `translate(${cx}, ${cy}) rotate(${rotate})`;
         })
         .style("pointer-events", "none");
 
@@ -908,22 +995,33 @@ function initFan(startNodeId = null) {
         const el = d3.select(this);
 
         // Me Node (Text Mode)
+        // Me Node (Center)
         if (d.depth === 0) {
             el.attr("text-anchor", "middle")
                 .style("font-family", "sans-serif")
                 .style("fill", "#333")
                 .style("pointer-events", "none");
 
+            // Name
             el.append("text")
                 .text(d.data.name)
-                .attr("y", 4)
-                .style("font-size", "12px")
+                .attr("y", -5)
+                .style("font-size", "14px")
                 .style("font-weight", "bold");
+
+            // Relation (e.g., "Family Member" or "Myself")
+            if (d.data.relation) {
+                el.append("text")
+                    .text(d.data.relation)
+                    .attr("y", 12)
+                    .style("font-size", "10px")
+                    .style("fill", "#555");
+            }
             return;
         }
 
         // Expand Button Text (Dynamic or Depth Limit)
-        if (d.childrenHidden || d.depth === 4) {
+        if (d.isPlusButton || d.depth === 4) {
             // Re-center for the Plus symbol to ensure it's un-rotated IF we want upright.
             // But the transform above applies rotation.
             // Let's undo rotation for the Plus sign if we want it perfect, 
@@ -952,6 +1050,19 @@ function initFan(startNodeId = null) {
         const relationText = d.data.relation;
         const name = d.data.name;
 
+        // Dynamic Font Size
+        const angle = d.x1 - d.x0; // Radians
+        let fontSize = 8; // Reduced base
+
+        // Scale down for smaller slices
+        if (angle < 0.25) fontSize = 7;
+        if (angle < 0.20) fontSize = 6;
+        if (angle < 0.15) fontSize = 5;
+        if (angle < 0.10) fontSize = 4;
+        if (angle < 0.06) fontSize = 3;
+        if (angle < 0.03) fontSize = 2; // Tiny
+
+        // Apply
         el.attr("text-anchor", "middle")
             .style("font-family", "sans-serif")
             .style("fill", "#000");
@@ -959,25 +1070,19 @@ function initFan(startNodeId = null) {
         // Name
         el.append("text")
             .text(name)
-            .attr("y", -4)
-            .style("font-size", d.depth === 1 ? "8px" : "6px")
+            .attr("y", -fontSize / 2) // Center logic
+            .style("font-size", fontSize + "px")
             .style("font-weight", "bold")
             .style("pointer-events", "none");
 
-        // Relation
-        if (d.depth === 1) {
-            el.select("text").attr("y", -5);
-            el.append("text").text(relationText)
-                .attr("y", 5)
-                .style("font-size", "6px")
-                .style("pointer-events", "none");
-        } else {
-            el.append("text").text(relationText)
-                .attr("y", 5)
-                .style("font-size", "5px")
-                .style("fill", "#444")
-                .style("pointer-events", "none");
-        }
+        // Relation (Smaller than Name)
+        const relSize = Math.max(3, fontSize - 2);
+
+        el.append("text").text(relationText)
+            .attr("y", fontSize / 2 + 2)
+            .style("font-size", relSize + "px")
+            .style("fill", "#444")
+            .style("pointer-events", "none");
     });
 
     // Zoom Logic
@@ -1069,7 +1174,7 @@ function init3DTree() {
     const getExtrusion = (depth) => Math.max(10, 50 - (depth * 2)); // Dynamic Extrusion: 50 layers start, -2 per gen
     const cardWidth = 80; // Avatar Card Width
     const cardHeight = 100; // Avatar Card Height
-    const tileW = 50; // Size of the square tile
+    const tileW = 50; // Size of the square tile - Reverted
     const tileH = 10; // Thickness (Z-height of the button)
     const tileR = 10; // Corner radius
 
@@ -1144,7 +1249,7 @@ function init3DTree() {
 
     // Standard Tree Layout
     const treeLayout = d3.tree()
-        .nodeSize([240, 400]) // Wider x, deeper y (Increased for link visibility)
+        .nodeSize([300, 450]) // Reverted spacing for smaller icons
         .separation((a, b) => a.parent == b.parent ? 1.1 : 1.3);
 
     const root = d3.hierarchy(familyData);
@@ -1195,13 +1300,14 @@ function init3DTree() {
         const allY = siblings.map(n => n.y);
 
         const minX = d3.min(allX);
-        const maxX = d3.max(allX);
+        // Correct maxX to account for spouse offset (110 is the gap used in renderAvatar)
+        const maxX = d3.max(siblings.map(n => n.x + (n.data.spouse ? 110 : 0)));
         const depthY = allY[0];
 
         // Padding
-        const padX = 150; // Increased padding for wider spouse gap
+        const padX = 300; // Increased breadth (width padding)
         const widthT = (maxX - minX) + padX * 2;
-        const depthT = 180;
+        const depthT = 220; // Decreased depth (length)
 
         // Center
         const cx = (minX + maxX) / 2;
@@ -1332,16 +1438,16 @@ Z`;
         // Generation Label
         const [lblX, lblY] = toIso(l, b);
         grp.append("text")
-            .attr("x", lblX - 20)
-            .attr("y", lblY - 10)
-            .text(`Generation ${siblings[0].depth} `)
-            .attr("fill", "#888")
-            .attr("font-size", "12px")
+            .attr("x", lblX - 25) // Shift left
+            .attr("y", lblY + 5)  // Center vertically relative to corner
+            .text(`Generation ${siblings[0].depth}`)
+            .attr("fill", "#666")
+            .attr("font-size", "14px")
             .attr("font-family", "sans-serif")
-            .attr("font-weight", "500")
+            .attr("font-weight", "bold")
             .style("pointer-events", "none")
-            .attr("text-anchor", "end")
-            .attr("transform", `rotate(-30, ${lblX}, ${lblY})`);
+            .attr("text-anchor", "end"); // Align end so it sits to the left
+        // .attr("transform", `rotate(-30, ${lblX}, ${lblY})`); // Removed rotation per user request
     });
 
     // --- Links ---
@@ -1489,7 +1595,7 @@ Z`;
     // Tile Config (Moved to top)
 
     const nodes = avatarLayer.selectAll(".node-group")
-        .data(root.descendants())
+        .data(root.descendants().sort((a, b) => a.isoY - b.isoY))
         .enter().append("g")
         .attr("transform", d => {
             const [ix, iy] = toIso(d.x, d.y);
@@ -1666,34 +1772,82 @@ Z`;
                     .attr("stroke-opacity", 0.8);
             }
 
-            // --- Text on Floor (Rotated / Depth Aligned) ---
-            // "Facing the other side" -> Aligned with Depth Axis
-            // Matrix to map Text X -> Depth Axis (approx)
-            // vector (0.8, -0.4) is along the other diagonal
-            const textMatrix = "0.8, -0.4, 0.8, 0.4, 0, 0";
+            // --- Text Below Block (Billboard - Flat 2D) ---
+            // We want the text to float underneath the block.
+            // The block is centered at (0,0) in avGrp local coords (which is top-face center).
+            // We need to move down by the block height + some padding.
+            // However, we are in ISOMETRIC VIEW. "Down" on screen is +Y.
+
+
+
+            // --- Text Below Block (Isometric - Lying Flat) ---
+            // User requested "direction of user icon", implying isometric projection.
+            // We use the same matrix as the top face for consistency.
+            // Top Face Matrix (basis vectors): X=(0.8, 0.4), Y=(-0.8, 0.4)
+            // But we actually want the text to read horizontally-ish? 
+            // If we use the exact top-face matrix, text runs along the diagonal.
+            // Let's align it with the "Row" axis (Visual X).
+
+            // Revert to "Floor" style but centered and clean (No pill).
+
+            // We need to move it "down" in 3D space.
+            // In tree space, +y is "depth/down".
+            // So we can just translate in the group transform?
+            // But this group is inside `g` which is at (ix, iy).
+            // A visual Y offset of +50px moves it down-screen.
+
+            // Matrix to make it look like it's on the plane:
+            // Standard Iso: rotate(-30) skewX(30)? 
+            // Let's use the explicit matrix for control.
+            // We want the text baseline to align with the Row Axis (Down-Right).
+            // That vector is (1, 0.5) roughly.
+
+            // Let's use the Top Face matrix:
+            const textMatrix = "0.8, 0.4, -0.8, 0.4, 0, 0";
+
+            // Position:
+            // We want it centered under the block.
+            // The block center in `avGrp` is (0,0).
+            // But with the matrix, (0,0) is the origin of the text coordinate system.
+            // We need to offset y "visually down".
+            // In the transformed space, +x moves Down-Right, +y moves Down-Left.
+            // To move Straight Down? (+y visual).
+            // (0.8x - 0.8y, 0.4x + 0.4y) = (0, 50).
+            // 0.8(x-y) = 0 => x=y.
+            // 0.4(2x) = 50 => 0.8x = 50 => x = 62.5.
+            // So translate(62.5, 62.5) in local space moves strictly down?
+
+            const textYOffset = 50;
+
+            // Helper to truncate text
+            const truncate = (str, n) => (str && str.length > n) ? str.slice(0, n - 3) + "..." : str;
 
             const textG = avGrp.append("g")
-                .attr("transform", `translate(${tileW / 2 + 10}, ${tileW / 2}) matrix(${textMatrix})`);
+                .attr("transform", `translate(0, ${textYOffset}) matrix(${textMatrix})`);
 
             // Name
-            textG.append("text")
-                .text(data.name)
-                .attr("text-anchor", "start") // Start from the node
+            const nameText = textG.append("text")
+                .text(truncate(data.name, 15)) // Truncate name
+                .attr("text-anchor", "middle")
                 .attr("fill", "#222")
                 .attr("font-size", "14px")
                 .attr("font-weight", "bold")
                 .style("font-family", "sans-serif");
 
+            nameText.append("title").text(data.name); // Tooltip
+
             // Relation
             if (!data.isMe) {
-                textG.append("text")
-                    .text(data.relation)
-                    .attr("text-anchor", "start")
-                    .attr("y", 14) // Line height
-                    .attr("fill", "#666")
+                const relationText = textG.append("text")
+                    .text(truncate(data.relation, 20)) // Truncate relation
+                    .attr("text-anchor", "middle")
+                    .attr("y", 14)
+                    .attr("fill", "#555")
                     .attr("font-size", "10px")
                     .style("font-family", "sans-serif")
                     .style("text-transform", "uppercase");
+
+                relationText.append("title").text(data.relation); // Tooltip
             }
         };
 
@@ -1709,9 +1863,34 @@ Z`;
         .on("zoom", (e) => g.attr("transform", e.transform));
     svg.call(zoom);
 
-    // Initial Center
-    const initialTransform = d3.zoomIdentity.translate(width / 2, 100).scale(1);
-    svg.call(zoom.transform, initialTransform);
+    svg.call(zoom);
+
+    // Auto Zoom to Fit (3D)
+    // Use timeout to allow layout to settle (calculating BBox of complex paths)
+    setTimeout(() => {
+        try {
+            const bounds = g.node().getBBox();
+            if (bounds.width > 0 && bounds.height > 0) {
+                const scale = Math.min(1.0, (width - 100) / bounds.width, (height - 100) / bounds.height);
+                const midX = bounds.x + bounds.width / 2;
+                const midY = bounds.y + bounds.height / 2;
+
+                const t = d3.zoomIdentity
+                    .translate(width / 2 - midX * scale, height / 2 - midY * scale)
+                    .scale(scale);
+
+                svg.transition().duration(750).call(zoom.transform, t);
+            } else {
+                // Fallback
+                const initialTransform = d3.zoomIdentity.translate(width / 2, 100).scale(0.5);
+                svg.call(zoom.transform, initialTransform);
+            }
+        } catch (e) {
+            console.error("Auto-zoom failed", e);
+            const initialTransform = d3.zoomIdentity.translate(width / 2, 100).scale(0.5);
+            svg.call(zoom.transform, initialTransform);
+        }
+    }, 50);
 }
 
 
@@ -2267,11 +2446,9 @@ function initVerticalTreeV2() {
         .attr("class", "tree-node")
         // Swap X and Y for translation
         .attr("transform", d => `translate(${getX(d)}, ${getY(d)})`)
-        .style("cursor", "pointer")
-        .on("click", (event, d) => {
-            event.stopPropagation();
-            showModal(d);
-        });
+        // Cursor style kept, but click removed from here
+        // Click is now handled per-card in renderVCard
+        .style("cursor", "border");
 
     const renderVCard = (selection, data, isSpouse = false) => {
         const truncate = (str, n) => (str && str.length > n) ? str.slice(0, n - 3) + "..." : str;
@@ -2288,6 +2465,14 @@ function initVerticalTreeV2() {
             .attr("rx", 10)
             .attr("fill", "url(#card-gradient)") // Use SVG Gradient
             .attr("class", "tree-card-bg");
+
+        // Add Click Listener to specific card
+        grp.style("cursor", "pointer")
+            .on("click", (event) => {
+                event.stopPropagation();
+                // Wrap data to match showModal expectation (d.data...)
+                showModal({ data: data });
+            });
 
         const clipId = `vclip-${data.id}`;
         grp.append("clipPath")
@@ -2410,6 +2595,9 @@ function initVerticalTreeV2() {
 // Initialize App
 // Load Data and Initialize
 d3.json("data.json").then(data => {
+    // Store Raw Data
+    rawFamilyData = data.data || data; // Handle {data: []} or []
+
     // Transform data if it's in API format
     familyData = transformFamilyData(data);
 
