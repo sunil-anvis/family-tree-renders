@@ -636,7 +636,7 @@ function initFan(startNodeId = null) {
             d.x0 = 0;
             d.x1 = 2 * Math.PI;
             d.y0 = 0;
-            d.y1 = ringThickness[1]; // Center Circle Radius
+            d.y1 = ringThickness[1] - 5; // Center Circle Radius
 
             // Identify "Mother" side if we want strict split?
             // Standard: Sort by something?
@@ -701,8 +701,10 @@ function initFan(startNodeId = null) {
                     child.x0 = d.x0 + i * step;
                     child.x1 = d.x0 + (i + 1) * step;
                     // Init Y for filter check
-                    child.y0 = depthStartRadius[child.depth] || (child.depth * 50);
-                    child.y1 = (depthStartRadius[child.depth] + ringThickness[child.depth]) || ((child.depth + 1) * 50);
+                    const rStart = depthStartRadius[child.depth] || (child.depth * 50);
+                    const rThick = ringThickness[child.depth] || 50;
+                    child.y0 = rStart + 5;
+                    child.y1 = rStart + rThick - 5;
                 });
             }
 
@@ -852,7 +854,7 @@ function initFan(startNodeId = null) {
                         if (currentFanRootId) fanHistory.push(currentFanRootId);
                         initFan(d.data.id);
                     } else {
-                        showModal(d.data);
+                        showModal(d);
                     }
                 })
                 .on("mouseover", function () {
