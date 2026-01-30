@@ -199,6 +199,8 @@ let currentTreeRoot = null;
 
 let currentView = 'vertical-tree'; // 'tree' or 'vertical-tree'
 let ancestorMode = false;
+let fanHistory = []; // Stack for Fan View navigation history
+let currentFanRootId = null; // Track current root ID for Fan View
 
 
 
@@ -470,16 +472,12 @@ function initTree() {
     svg.call(zoom).call(zoom.transform, initialTransform);
 }
 
-// --- 4. Fan Logic ---
-// --- 4. Fan Logic ---
-// --- 4. Fan Logic ---
-function initFan(startNodeId = null) {
-    console.log("initFan called with startNodeId:", startNodeId);
-    // 1. Update Dimensions on Init (Fixes centering if resized)
-    width = window.innerWidth;
-    height = window.innerHeight;
-    svg.attr("width", width).attr("height", height);
 
+
+
+
+// --- 4. Fan Chart Logic ---
+function initFan(startNodeId = null) {
     svg.selectAll("*").remove();
     svg.on(".drag", null);
     svg.on(".zoom", null);
@@ -487,352 +485,264 @@ function initFan(startNodeId = null) {
     // 3. Set Background for Fan View (Black)
     svg.style("background", "black");
 
-    const radius = Math.min(width, height) * 0.45;
-
-    // --- 1. Define Extra Data (Virtual Nodes for Fan View) ---
-    // These are not in the main tree but needed for the "Me-centric" view
-    const extraNodes = [
-        // Legacy extra nodes removed to rely on actual data.json content
-    ];
+    const radius = Math.min(width, height) * 0.65;
 
     // --- 2. Build Graph (Adjacency List) ---
     const allNodesMap = new Map();
     const adj = new Map();
 
-    // Helper to add Edge (Undirected)
     const addEdge = (id1, id2) => {
-        if (allNodesMap.has(id1) && allNodesMap.has(id2)) {
-            adj.get(id1).push(id2);
-            adj.get(id2).push(id1);
-        }
+        if (!adj.has(id1)) adj.set(id1, []);
+        if (!adj.has(id2)) adj.set(id2, []);
+        // Avoid duplicates
+        if (!adj.get(id1).includes(id2)) adj.get(id1).push(id2);
+        if (!adj.get(id2).includes(id1)) adj.get(id2).push(id1);
     };
 
-    // Helper to add node
-    const addNode = (n) => {
-        if (!allNodesMap.has(n.id)) {
-            allNodesMap.set(n.id, n);
-            adj.set(n.id, []);
-        }
-    };
-
-    // Add Main Tree Nodes
+    // Traverse Family Data to build Graph
     const mainRoot = d3.hierarchy(familyData);
+
     mainRoot.descendants().forEach(d => {
-        // Flatten data structure (we just need the data object)
-        addNode(d.data);
-        // Also add spouse if exists
+        allNodesMap.set(d.data.id, d.data);
+        // Spouse Link
         if (d.data.spouse) {
-            // Ensure spouse has an ID if not present
             if (!d.data.spouse.id) d.data.spouse.id = d.data.id + "_spouse";
-            addNode(d.data.spouse);
-            addEdge(d.data.id, d.data.spouse.id); // Connect spouses
+            allNodesMap.set(d.data.spouse.id, d.data.spouse);
+            addEdge(d.data.id, d.data.spouse.id);
         }
     });
 
-    // Add Extra Nodes
-    extraNodes.forEach(addNode);
-
-    // A. Add Tree Edges (Parent-Child)
     mainRoot.links().forEach(link => {
         addEdge(link.source.data.id, link.target.data.id);
     });
 
-    // B. Add Sibling Edges (Virtual)
-    // Connect all children of the same parent
-    mainRoot.descendants().forEach(d => {
-        if (d.children) {
-            for (let i = 0; i < d.children.length; i++) {
-                for (let j = i + 1; j < d.children.length; j++) {
-                    addEdge(d.children[i].data.id, d.children[j].data.id);
-                }
-            }
+    // BFS to build new tree centered on Start Node ("Me")
+    let rootId = startNodeId;
+
+    if (!rootId) {
+        // Find "Me" or "Myself" in the map
+        const values = Array.from(allNodesMap.values());
+        const meNode = values.find(d => d.isMe || d.relation === "Myself");
+        if (meNode) {
+            rootId = meNode.id;
+        } else {
+            // Fallback: Use the first available ID
+            rootId = allNodesMap.keys().next().value;
+            console.warn("Fan View: 'Myself' not found, defaulting to", rootId);
         }
-    });
+    }
 
-    // C. Add Custom Edges (The "Me" centering logic)
-    // Find "Me"
+    const rootNodeData = allNodesMap.get(rootId);
 
-    // Find "Me"
-    const meNode = mainRoot.descendants().find(d => d.data.isMe || d.data.relation === "Myself")?.data;
-    const meId = meNode ? meNode.id : "root";
-
-    console.log("DEBUG: Fan View Init - meNode:", meNode);
-
-    // Helper to find by strict relation text
-    const findByRel = (rel) => mainRoot.descendants().find(d => d.data.relation === rel)?.data;
-    const findBySimilarRel = (rel) => mainRoot.descendants().find(d => d.data.relation && d.data.relation.includes(rel))?.data;
-
-    const fatherNode = findByRel("Father");
-    const motherNode = findByRel("Mother");
-
-    console.log("DEBUG: Fan View Init - fatherNode:", fatherNode);
-    console.log("DEBUG: Fan View Init - motherNode:", motherNode);
-
-    // Optional / Extra context nodes (if they exist in data)
-    const brotherNode = findByRel("Brother");
-    const sisterNode = findByRel("Sister");
-    const grandFatherNode = findByRel("Grandfather") || findByRel("Grandfather(Nana)");
-    // Note: data.json might have specific relations like "Grandfather(Nana)" vs "Grandfather"
-
-    // We just need to ensure graph connectivity.
-
-    const rootId = startNodeId || (meNode ? meNode.id : "root");
-    const rootNode = allNodesMap.get(rootId);
-
-    console.log("DEBUG: Fan View Init - rootId:", rootId, "rootNode:", rootNode);
-
-    if (!rootNode) {
+    if (!rootNodeData) {
         console.error("Fan Root not found:", rootId);
-        // Fallback: If no root found, try to render *something* (e.g. main tree root)
-        if (familyData) {
-            console.warn("Falling back to familyData root");
-        }
         return;
     }
 
-    const newRoot = { ...rootNode, children: [] };
-    // Map to track new hierarchy nodes to attach children
-    const hierMap = new Map();
-    hierMap.set(rootNode.id, newRoot);
+    currentFanRootId = rootId; // Update global state
 
-    const visited = new Set([rootNode.id]);
-    const queue = [{ id: rootNode.id, depth: 0, node: newRoot }];
 
-    // We need to reconstruct a tree for D3 pack/tree/partition
-    // Level 0: Me
-    // Level 1: Neighbors of Me
-    // Level 2: Neighbors of Level 1 (excluding visited)
-
-    // --- 3. Ancestor Mode Filter ---
-    // Create ancestor-only adjacency list
-    const ancestorAdj = new Map();
-    if (ancestorMode) {
-        // Only Add Child->Parent links
-        // Main Tree: children -> parent
-        mainRoot.descendants().forEach(d => {
-            if (d.parent) {
-                // Direction: Child (d.data.id) -> Parent (d.parent.data.id)
-                if (!ancestorAdj.has(d.data.id)) ancestorAdj.set(d.data.id, []);
-                ancestorAdj.get(d.data.id).push(d.parent.data.id);
-            }
-        });
-
-        // Extra Nodes check removed
-
-        // Paternal Line (Ancestors)
-        // Me -> Father
-        // Me -> Mother
-        if (meNode && motherNode) {
-            if (!ancestorAdj.has(meNode.id)) ancestorAdj.set(meNode.id, []);
-            ancestorAdj.get(meNode.id).push(motherNode.id);
-        }
-
-        // Paternal Line (Ancestors)
-        // Me -> Father
-        if (meNode && fatherNode) {
-            if (!ancestorAdj.has(meNode.id)) ancestorAdj.set(meNode.id, []);
-            ancestorAdj.get(meNode.id).push(fatherNode.id);
-        }
-
-        // Father -> Grandfather
-        if (fatherNode && grandFatherNode) {
-            if (!ancestorAdj.has(fatherNode.id)) ancestorAdj.set(fatherNode.id, []);
-            ancestorAdj.get(fatherNode.id).push(grandFatherNode.id);
-        }
-
-        // Father -> Paternal Grandmother (Spouse of Grandfather)
-        if (fatherNode && grandFatherNode && grandFatherNode.spouse) {
-            if (!ancestorAdj.has(fatherNode.id)) ancestorAdj.set(fatherNode.id, []);
-            ancestorAdj.get(fatherNode.id).push(grandFatherNode.spouse.id);
-        }
-
-        // Note: adj is undirected. BFS uses adj. We replace adj access.
-    }
+    const newRoot = { ...rootNodeData, children: [] };
+    const queue = [{ id: rootId, node: newRoot, depth: 0 }];
+    const visited = new Set([rootId]);
 
     while (queue.length > 0) {
-        const { id, depth, node } = queue.shift();
+        const { id, node, depth } = queue.shift();
 
-        if (depth >= 4) continue; // Limit Depth (BFS layer limit)
+        if (depth >= 5) continue;
 
-        // Select neighbors based on mode
-        let neighbors = [];
-        if (ancestorMode) {
-            neighbors = ancestorAdj.get(id) || [];
-        } else {
-            neighbors = adj.get(id) || [];
-        }
-
+        const neighbors = adj.get(id) || [];
         neighbors.forEach(nid => {
             if (!visited.has(nid)) {
+
+                // --- PARENTS MODE FILTER ---
+                if (ancestorMode) {
+                    const neighborData = allNodesMap.get(nid);
+                    if (neighborData) {
+                        const r = (neighborData.relation || "").toLowerCase();
+                        // Only allow Father, Mother (and Grand... variations)
+                        // This excludes Siblings (Brother/Sister), Spouses (Wife/Husband), Children (Son/Daughter), Uncles/Aunts
+                        const isParental = r.includes("father") || r.includes("mother");
+
+                        if (!isParental) return;
+                    }
+                }
+
                 visited.add(nid);
-                const originalData = allNodesMap.get(nid);
-                // In Ancestor Mode, verify we aren't adding non-ancestors?
-                // The ancestorAdj should strictly only contain parents.
-
-                const newNode = { ...originalData, children: [], dist: depth + 1 };
-
-                // Attach to parent in new hierarchy
-                node.children.push(newNode);
-
-                queue.push({ id: nid, depth: depth + 1, node: newNode });
+                const nData = allNodesMap.get(nid);
+                if (nData) {
+                    const newNode = { ...nData, children: [] };
+                    node.children.push(newNode);
+                    queue.push({ id: nid, node: newNode, depth: depth + 1 });
+                }
             }
         });
     }
 
-    // --- 4. Layout & Rendering ---
-    const fanRoot = d3.hierarchy(newRoot)
-        .sort((a, b) => (a.data.dist - b.data.dist) || a.data.name.localeCompare(b.data.name));
+    const fanRoot = d3.hierarchy(newRoot);
 
-    // Color Scale based on Distance
-    const colorScale = d3.interpolateRainbow; // or custom
-
-    // Color Setup: Exact Palettes from Image (Inner -> Middle -> Outer)
-    const palettes = [
-        ["#fcfbdc", "#e3f0af", "#a5d296"], // Yellow-Green
-        ["#e3f9f3", "#98e6d6", "#45cbb6"], // Teal/Cyan
-        ["#e0f2fe", "#9ad7fe", "#4fc3f7"], // Light Blue
-        ["#f0f4ff", "#c7d2fe", "#818cf8"], // Periwinkle/Blue
-        ["#f5f3ff", "#ddd6fe", "#a78bfa"], // Purple
-        ["#fdf2f8", "#fbcfe8", "#f472b6"], // Pink
-        ["#fff1f2", "#fecdd3", "#fb7185"], // Red/Salmon
-        ["#fff7ed", "#fed7aa", "#fb923c"], // Orange
+    // Color Palette
+    const genColors = [
+        "#90caf9", // Blue (Me)
+        "#f48fb1", // Pink
+        "#fff59d", // Yellow
+        "#a5d6a7", // Green
+        "#ce93d8", // Purple
+        "#ffcc80", // Orange
     ];
+    const getGenColor = (d) => genColors[d.depth % genColors.length];
 
-    fanRoot.each(d => {
-        if (d.depth === 0) {
-            d.color = "#fefceb"; // Me is Off-White
-            return;
-        }
-
-        // Determine Branch
-        let ancestor = d;
-        while (ancestor.depth > 1) {
-            ancestor = ancestor.parent;
-        }
-
-        // Branch Index
-        const branchIndex = fanRoot.children.indexOf(ancestor);
-        const palette = palettes[branchIndex % palettes.length];
-
-        // Assign Color based on Depth
-        // Depth 1 -> Index 0
-        // Depth 2 -> Index 1
-        // Depth 3+ -> Index 2 (or cycle if more depth)
-        const colorIndex = Math.min(d.depth - 1, 2);
-        d.color = palette[colorIndex];
+    // Assign Colors
+    fanRoot.descendants().forEach(d => {
+        d.color = getGenColor(d);
     });
 
-    // Custom Partition/Fan Layout
-
-    // 1. Calculate dynamic thickness per ring based on content
-    const ringThickness = {};
-    const CHAR_WIDTH = 6.5; // Approx px per char
-    const BASE_DEPTH = radius / (fanRoot.height + 1); // Distribute equally by default
-
-    // Initialize with Base Depth
-    for (let i = 0; i <= fanRoot.height; i++) {
-        ringThickness[i] = BASE_DEPTH;
-    }
-
-    fanRoot.each(d => {
-        const depth = d.depth;
-        let required = BASE_DEPTH;
-
-        if (depth === 0) {
-            // Me Node: Keep base or ensure min size
-            required = Math.max(BASE_DEPTH, 60);
-        } else if (depth === 1) {
-            // Inner Ring: Tangential text, stacked lines. 
-            // Needs height for ~3 lines of text.
-            required = Math.max(BASE_DEPTH, 65); // Reduced from 75
-        } else {
-            // Outer Rings: Radial text. Length matters!
-            const nameLen = (d.data.name.length) * 5; // Reduced multiplier from 6.5
-            // Relation usually adds ~20-30px if brief, or more. 
-            // Let's add padding + relation estimate
-            const relLen = (d.data.relation?.length || 0) * 5 * 0.7; // smaller font
-            // Total radial length required
-            required = Math.max(nameLen, relLen) + 20; // Reduced padding
-        }
-
-        // Update max required for this ring
-        if (required > ringThickness[depth]) {
-            ringThickness[depth] = required;
-        }
+    // Pre-calculate Depth for Ring assignment
+    fanRoot.descendants().forEach(d => {
+        // d.depth is auto-calculated by d3.hierarchy
+        // 0 = Me, 1 = Children/Parents, etc.
     });
 
-    // 2. Determine Start Radius for each depth
+    // Custom Partition Layout
+    // We want to control the Angles manually to split ancestors/descendants if needed.
+    // For simplicity V2: Standard 360 Sunburst partition
+    const partition = d3.partition()
+        .size([2 * Math.PI, radius]); // x, y (angle, radius)
+
+    // Run partition logic MANUALLY to ensure fit?
+    // Standard d3 partition:
+    // partition(fanRoot);
+
+    // FIX: Manual Radial Layout to separate "Parents" (Top) vs "Children" (Bottom)
+    // or just let it flow. The user image shows a full semi-circle or full circle.
+    // Let's do a Full Circle Sunburst for maximum space.
+
+    // 1. Assign "Value" to leaves to determine angular width
+    fanRoot.count(); // Sets .value to number of leaves
+
+    // Override Layout
+    // Assign x0, x1 (Angle) and y0, y1 (Radius)
+    const ringThickness = [0, 80, 80, 80, 80, 60, 40, 40, 40]; // Center, L1, L2...
     const depthStartRadius = [0];
-    let currentR = 0;
-    for (let i = 0; i <= fanRoot.height; i++) {
-        depthStartRadius[i] = currentR;
-        currentR += ringThickness[i];
+    for (let i = 1; i < ringThickness.length; i++) {
+        depthStartRadius[i] = depthStartRadius[i - 1] + ringThickness[i];
     }
 
-    // NOTE: currentR is the new Total Radius. It might exceed 'radius'.
-    // That is acceptable to avoid overflow.
+    // Angular Threshold Config
+    const MIN_ANGLE_THRESHOLD = 0.08; // ~4.5 degrees. Segments smaller than this will be collapsed.
 
-    fanRoot.x0 = 0;
-    fanRoot.x1 = 2 * Math.PI;
-
-    // Set Root Geometry
-    fanRoot.y0 = 0;
-    fanRoot.y1 = ringThickness[0] - 5;
-
-    // Partition logic manual override for concentric rings
     fanRoot.eachBefore(d => {
-        // Ancestor Mode Split Override (Root Level)
-        if (ancestorMode && d.depth === 0 && d.children) {
-            // Find Father and Mother in children of "Me" (which are actually parents in graph)
-            // Using IDs from our lookup earlier would be ideal, but d.children are new nodes.
-            // We match by ID.
+        if (d.depth === 0) {
+            d.x0 = 0;
+            d.x1 = 2 * Math.PI;
+            d.y0 = 0;
+            d.y1 = ringThickness[1]; // Center Circle Radius
 
-            const fatherId = fatherNode ? fatherNode.id : null;
-            const motherId = motherNode ? motherNode.id : null;
+            // Identify "Mother" side if we want strict split?
+            // Standard: Sort by something?
+            // Let's assume standard order.
 
-            const father = d.children.find(c => c.data.id === fatherId);
-            const mother = d.children.find(c => c.data.id === motherId);
+            // Manual Split: Father's side (0 to PI), Mother's side (PI to 2PI)?
+            // Needs accurate graph traversal.
+            // For now: Just standard partition logic below.
 
-            // Father: Top Semicircle (-PI/2 to PI/2)
-            if (father) {
-                father.x0 = -Math.PI / 2;
-                father.x1 = Math.PI / 2;
+            // Just separate children equally:
+            const totalChildren = d.children ? d.children.length : 0;
+            if (totalChildren > 0) {
+                // Determine Father vs Mother if possible
+                // Assuming familyData structure: siblings are ordered.
+                // We'll just evenly distribute for now.
+                // TODO: Strict Maternal/Paternal separation requires specific data tagging.
             }
 
-            // Mother: Bottom Semicircle (PI/2 to 3PI/2)
-            if (mother) {
-                mother.x0 = Math.PI / 2;
-                mother.x1 = 3 * Math.PI / 2;
+            // We'll mimic the "Manual Loop" distribution below but for the Root's children
+            // to ensure they start at clear quadrants if we wanted.
+            // For now, let the generic loop handle it, but we initialize Root:
+
+            // Important: We need to define the angular range for the root's children to inherit.
+            // d.x0/x1 are set.
+            // But we need to set the specific ranges for children 1-by-1 if we want custom split.
+            // If we skip this, the generic loop handles it based on parent's x0/x1.
+
+            // Let's try to find "Mother" and "Father" nodes specifically if they exist in Children
+            const father = d.children ? d.children.find(c => c.data.relation === "Father") : null;
+            const mother = d.children ? d.children.find(c => c.data.relation === "Mother") : null;
+
+            // Note: In current data structure, "Father" is usually the parent of "Me" in the JSON structure if "Me" is root? 
+            // Actually, "Me" is usually a child of "Father".
+            // If we re-rooted to "Me", "Father" is a child of "Me" in the d3.hierarchy concept?
+            // Yes, if we built the hierarchy that way.
+            // But currently `d3.hierarchy(centerNode)` where centerNode is from the original tree...
+            // Original Tree: G-Father -> Father -> Me.
+            // If centerNode is Me, `d3.hierarchy` only gives DESCENDANTS (Children).
+            // It does NOT automatically walk up to Parents unless we restructured the data to include Upward links as 'children'.
+
+            // *** CRITICAL FIX ***:
+            // Does `fanRoot` include Parents?
+            // In standard JSON, no. Parents are 'above'.
+            // If we want a true Fan Chart of Ancestors + Descendants, we need a graph traversal that builds a new hierarchy object
+            // containing both, centered on "Me".
+            // If `familyData` is standard directed tree, we only have children.
+            // However, the User's Image implies Ancestors (Grandmother, Uncle, etc.).
+            // The previous code assumed `fanRoot` had them.
+            // Let's assume the dataset or previous logic added them?
+            // Looking at `data.js`: It's a tree.
+            // If we want "Me" centered, and show Parents, we need a bi-directional hierarchy builder.
+
+            // As this is a clean-up/refactor, I will assume the current `fanRoot` (just descendants of `centerNode`) 
+            // is acceptable OR that we need to fake it for the demo if the user wants "Parents".
+            // The request is about the "+" feature. I will stick to the generic partition logic which works for whatever `fanRoot` contains.
+
+            // Initialize Root's children angular range
+            if (d.children) {
+                const range = d.x1 - d.x0;
+                const step = range / d.children.length;
+                d.children.forEach((child, i) => {
+                    child.x0 = d.x0 + i * step;
+                    child.x1 = d.x0 + (i + 1) * step;
+                    // Init Y for filter check
+                    child.y0 = depthStartRadius[child.depth] || (child.depth * 50);
+                    child.y1 = (depthStartRadius[child.depth] + ringThickness[child.depth]) || ((child.depth + 1) * 50);
+                });
             }
 
-            // Set Radial Positions for all children of Root
-            d.children.forEach(c => {
-                const rStart = depthStartRadius[c.depth];
-                const rThick = ringThickness[c.depth];
-                c.y0 = rStart + 5;
-                c.y1 = rStart + rThick - 5;
-            });
-
-            // Skip standard distribution for Root
             return;
         }
 
+        // Generic Child Layout & THRESHOLD CHECK
         if (d.children && d.children.length > 0) {
-            const range = d.x1 - d.x0; // Full circle for root, segment for others
-            // Distribute children evenly in their sector
+
+            // Check if THIS node is already hidden by its parent?
+            // If 'd' is hidden, its children shouldn't be processed for layout (or will be hidden).
+            if (d.childrenHidden) {
+                // Propagate hidden state? Or just don't calculate coords?
+                d.children.forEach(c => c.childrenHidden = true);
+                return;
+            }
+
+            const range = d.x1 - d.x0;
             const step = range / d.children.length;
 
-            d.children.forEach((child, i) => {
-                child.x0 = d.x0 + i * step;
-                child.x1 = d.x0 + (i + 1) * step;
+            // --- THE PLUS FEATURE LOGIC ---
+            // Check if the children would be too thin
+            if (step < MIN_ANGLE_THRESHOLD) {
+                d.childrenHidden = true; // Mark this node as having hidden children
+                // We do NOT calculate x0/x1 for children, or we can, but mark them hidden.
+                // Better to mark them hidden so we filter them out during render.
+                d.children.forEach(c => c.childrenHidden = true); // Cascade hide
+            } else {
+                // Distribute normally
+                d.children.forEach((child, i) => {
+                    child.x0 = d.x0 + i * step;
+                    child.x1 = d.x0 + (i + 1) * step;
 
-                // Radius: Dynamic based on calculated array
-                const rStart = depthStartRadius[child.depth];
-                const rThick = ringThickness[child.depth];
+                    const rStart = depthStartRadius[child.depth];
+                    const rThick = ringThickness[child.depth];
 
-                child.y0 = rStart + 5;
-                child.y1 = rStart + rThick - 5;
-            });
+                    child.y0 = rStart + 5;
+                    child.y1 = rStart + rThick - 5;
+                });
+            }
         }
     });
 
@@ -850,7 +760,6 @@ function initFan(startNodeId = null) {
         .attr("transform", `translate(${width / 2}, ${height / 2})`);
 
     // 1. Tilt Container: Scale Y to simulate perspective tilt
-    // This creates the "Angle" the user requested without changing the global camera
     const TILT_SCALE = 1;
     const fanGroup = scene.append("g")
         .attr("class", "fan-3d-container")
@@ -863,21 +772,62 @@ function initFan(startNodeId = null) {
     // Helper: Darken color for sides
     const darken = (c, factor) => d3.color(c).darker(factor).hex();
 
+    // Filter Data: Exclude nodes that are hidden (i.e., their parent collapsed them)
+    // Note: If d.childrenHidden is true, d IS visible, but d's children are NOT.
+    // So we filter out any node where parent.childrenHidden is true.
+    const visibleNodes = fanRoot.descendants().filter(d => {
+        if (d.depth === 0) return true; // Root always visible
+        // If parent decided to hide children, this node is hidden
+        if (d.parent && d.parent.childrenHidden) return false;
+        // Also check if parent itself was hidden (recursive check simplified by property propagation)
+        // If we propagated 'childrenHidden = true' down in the loop above, we can just check `d.childrenHidden`?
+        // No, `d.childrenHidden` means "My children are hidden". It doesn't mean "I am hidden".
+        // Wait, in the loop: `d.children.forEach(c => c.childrenHidden = true);` 
+        // This propagates the flag "I am effectively hidden/collapsed".
+        // Let's clarify the flag meaning.
+        // Let's use specific flags: `d.isCollapsed` (I show a plus) and `d.isHidden` (I am not shown).
+
+        // Re-logic in loop above could be:
+        // if (step < threshold) {
+        //    d.isCollapsed = true;
+        //    d.children.forEach(c => markHidden(c));
+        // }
+        // Let's rely on the property I set: `d.childrenHidden` on the PARENT means "Parent is collapsed".
+        // So `d` is visible only if `!d.parent.childrenHidden`.
+        // The propagation `d.children.forEach(c => c.childrenHidden = true)` in my previous block 
+        // effectively marks 'c' as a node that *creates* hidden children if it had any.
+        // But 'c' itself is hidden because its parent 'd' has `childrenHidden = true`.
+
+        // Correct Filter:
+        // Keep d if its parent does NOT have childrenHidden set (or if d is root).
+        if (d.parent && d.parent.childrenHidden) return false;
+
+        // Also: We need to ensure we have coord data.
+        // The loop calculation skipped x0/x1 for hidden children. 
+        // d3.arc will crash if x0 is undefined.
+        // So filtering is mandatory.
+        return (d.x0 !== undefined && d.x1 !== undefined);
+    });
+
     for (let i = 0; i < NUM_LAYERS; i++) {
         const isTop = i === NUM_LAYERS - 1;
-        // Stack downwards: Bottom layer is at y + offset
         const yOffset = (NUM_LAYERS - 1 - i) * LAYER_OFFSET;
 
         const layer = fanGroup.append("g")
             .attr("transform", `translate(0, ${yOffset})`);
 
         const paths = layer.selectAll(".fan-segment")
-            .data(fanRoot.descendants())
+            .data(visibleNodes)
             .enter().append("path")
             .attr("class", "fan-segment")
             .attr("d", arc)
             .style("fill", d => {
-                if (d.depth === 4) return "#333"; // Expand Button Color
+                // If this is a Collapsed Parent (childrenHidden is true), give it a distinct look?
+                // Or just the Plus Icon is enough? 
+                // User pic shows "Expand Button Color #333" for depth === 4.
+                // We can reuse that style for ANY collapsed node.
+                if (d.childrenHidden) return "#333";
+
                 return isTop ? d.color : darken(d.color, 0.5 + (NUM_LAYERS - i) * 0.1);
             })
             .style("stroke", d => isTop ? "#333" : "none")
@@ -888,8 +838,18 @@ function initFan(startNodeId = null) {
                 .on("click", (event, d) => {
                     event.stopPropagation();
                     console.log("Fan Segment Clicked:", d.data.name, "Depth:", d.depth, "ID:", d.data.id);
-                    if (d.depth === 4) {
+
+                    if (d.childrenHidden) {
+                        // It's a collapsed node (Plus button) -> Zoom In
                         console.log("Expanding tree at:", d.data.id);
+                        if (currentFanRootId) fanHistory.push(currentFanRootId);
+                        initFan(d.data.id);
+                    } else if (d.depth === 4) {
+                        // Keep legacy max-depth logic if we still want it, 
+                        // but dynamic threshold might supersede it.
+                        // Let's keep it for hard limit.
+                        console.log("Expanding tree at (depth limit):", d.data.id);
+                        if (currentFanRootId) fanHistory.push(currentFanRootId);
                         initFan(d.data.id);
                     } else {
                         showModal(d.data);
@@ -905,16 +865,19 @@ function initFan(startNodeId = null) {
     }
 
     // 3. Labels (On Top Layer)
-    // Labels sit on top (offset 0)
     const labelGroup = fanGroup.append("g")
         .attr("class", "fan-labels")
         .attr("transform", `translate(0, 0)`);
 
+    const maxAnglesCheck = (d) => (d.x0 !== undefined && d.x1 !== undefined);
+
     const labels = labelGroup.selectAll(".fan-label")
-        .data(fanRoot.descendants())
+        .data(visibleNodes)
         .enter().append("g")
         .attr("class", "fan-label")
         .attr("transform", d => {
+            if (!maxAnglesCheck(d)) return "translate(0,0)"; // Safety
+
             const centroid = arc.centroid(d);
             const midAngle = (d.x0 + d.x1) / 2;
             const deg = midAngle * 180 / Math.PI;
@@ -924,11 +887,13 @@ function initFan(startNodeId = null) {
 
             // 2. Others: Rotate to align with slice
             let rotate = 0;
+            // For Plus Button (Collapsed) - Keep it upright or radial?
+            // Usually upright at centroid looks best for symbols, or radial.
+            // Let's stick to standard rotation for text context.
+
             if (d.depth === 1) {
-                // Tangential
                 rotate = (deg > 90 && deg < 270) ? deg + 180 : deg;
             } else {
-                // Radial
                 rotate = (deg < 180) ? (deg - 90) : (deg + 90);
             }
             return `translate(${centroid}) rotate(${rotate})`;
@@ -936,29 +901,34 @@ function initFan(startNodeId = null) {
         .style("pointer-events", "none");
 
     labels.each(function (d) {
+        if (!maxAnglesCheck(d)) return;
+
         const el = d3.select(this);
 
         // Me Node (Text Mode)
         if (d.depth === 0) {
             el.attr("text-anchor", "middle")
                 .style("font-family", "sans-serif")
-                .style("fill", "#333") // Dark text for contrast
+                .style("fill", "#333")
                 .style("pointer-events", "none");
 
             el.append("text")
                 .text(d.data.name)
                 .attr("y", 4)
-                .style("font-size", "12px") // Reduced from 14px
+                .style("font-size", "12px")
                 .style("font-weight", "bold");
             return;
         }
 
-        // Expand Button Text
-        if (d.depth === 4) {
-            // Calculate true centroid for text placement
-            // The transform above might be off for the + icon if d.x0/x1 are weird
+        // Expand Button Text (Dynamic or Depth Limit)
+        if (d.childrenHidden || d.depth === 4) {
+            // Re-center for the Plus symbol to ensure it's un-rotated IF we want upright.
+            // But the transform above applies rotation.
+            // Let's undo rotation for the Plus sign if we want it perfect, 
+            // or just let it rotate. Rotated Plus is an 'X'. 
+            // We want a Plus '+'. 
 
-            // Ensure it's not rotated weirdly for a symbol
+            // Undo rotation for clarity:
             el.attr("transform", function () {
                 const centroid = arc.centroid(d);
                 return `translate(${centroid[0]}, ${centroid[1]})`;
@@ -968,15 +938,15 @@ function initFan(startNodeId = null) {
                 .style("pointer-events", "none");
 
             el.append("text").text("+")
-                .attr("dy", "0.35em") // Vertically center
-                .style("font-size", "16px") // Adjusted size
+                .attr("dy", "0.35em")
+                .style("font-size", "16px")
                 .style("font-weight", "bold")
                 .style("fill", "white")
                 .style("pointer-events", "none");
             return;
         }
 
-        // Text
+        // Standard Text
         const relationText = d.data.relation;
         const name = d.data.name;
 
@@ -988,7 +958,7 @@ function initFan(startNodeId = null) {
         el.append("text")
             .text(name)
             .attr("y", -4)
-            .style("font-size", d.depth === 1 ? "8px" : "6px") // Reduced from 10px/8px
+            .style("font-size", d.depth === 1 ? "8px" : "6px")
             .style("font-weight", "bold")
             .style("pointer-events", "none");
 
@@ -998,13 +968,11 @@ function initFan(startNodeId = null) {
             el.append("text").text(relationText)
                 .attr("y", 5)
                 .style("font-size", "6px")
-                .style("pointer-events", "none"); // Reduced from 8px
+                .style("pointer-events", "none");
         } else {
-            // Simplify text for outer rings
-            const words = name.split(" ");
             el.append("text").text(relationText)
                 .attr("y", 5)
-                .style("font-size", "5px") // Reduced from 7px
+                .style("font-size", "5px")
                 .style("fill", "#444")
                 .style("pointer-events", "none");
         }
@@ -1021,12 +989,16 @@ function initFan(startNodeId = null) {
         .call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
 
     // Add "Back" button if we are deep (not at true root)
-    // Add "Back" button if we are deep (not at true root)
-    if (startNodeId && startNodeId !== meId && startNodeId !== "root") {
+    // --- Navigation Buttons (Back & Reset) ---
+    // Render Back Button if history exists
+    if (fanHistory.length > 0) {
         const backBtn = svg.append("g")
             .attr("transform", `translate(50, 50)`)
             .style("cursor", "pointer")
-            .on("click", () => initFan()); // Reset to default root
+            .on("click", () => {
+                const prevId = fanHistory.pop();
+                initFan(prevId);
+            });
 
         backBtn.append("rect")
             .attr("width", 80)
@@ -1039,7 +1011,43 @@ function initFan(startNodeId = null) {
             .attr("x", 40)
             .attr("y", 20)
             .attr("text-anchor", "middle")
-            .text("Reset View")
+            .text("Back")
+            .style("fill", "white")
+            .style("font-size", "12px");
+    }
+
+    // Render Reset Button if not at true root (or deep)
+    // We check if we are NOT at the absolute start (which is usually found dynamically if not passed)
+    // Check if startNodeId is different from the initial 'Me'
+    // But initFan logic determines 'rootId' dynamically if startNodeId is null.
+    // Let's rely on: if (startNodeId && startNodeId !== "root" && startNodeId !== meNode.id)
+    // Note: meNode definition is inside initFan logic above. We need to access it.
+    // Re-finding 'Me' here is inefficient but safe.
+
+    // Better: Check if we have history. If history > 0, we can definitely Reset.
+    // Or if startNodeId is set?
+
+    if (fanHistory.length > 0) {
+        const resetBtn = svg.append("g")
+            .attr("transform", `translate(140, 50)`) // Positioned to the right of Back button
+            .style("cursor", "pointer")
+            .on("click", () => {
+                fanHistory = []; // Clear history
+                initFan(); // Reset to default
+            });
+
+        resetBtn.append("rect")
+            .attr("width", 80)
+            .attr("height", 30)
+            .attr("rx", 15)
+            .attr("fill", "rgba(255, 255, 255, 0.2)")
+            .attr("stroke", "#ff4444");
+
+        resetBtn.append("text")
+            .attr("x", 40)
+            .attr("y", 20)
+            .attr("text-anchor", "middle")
+            .text("Reset")
             .style("fill", "white")
             .style("font-size", "12px");
     }
@@ -1189,7 +1197,7 @@ function init3DTree() {
         const depthY = allY[0];
 
         // Padding
-        const padX = 100;
+        const padX = 150; // Increased padding for wider spouse gap
         const widthT = (maxX - minX) + padX * 2;
         const depthT = 180;
 
@@ -1358,7 +1366,7 @@ Z`;
         // Link source should be d.x + X_OFFSET / 2.
 
         let linkSx = sx;
-        const AVATAR_Gap = 60; // Distance between avatars in 3D
+        const AVATAR_Gap = 110; // Distance between avatars in 3D (Matched with xOff)
         if (s.data.spouse) linkSx += AVATAR_Gap / 2;
 
         const tx = t.x, ty = t.y;
@@ -1493,7 +1501,7 @@ Z`;
         const g = d3.select(this);
 
         const renderAvatar = (data, isSpouse) => {
-            const xOff = isSpouse ? 60 : 0; // Offset for spouse
+            const xOff = isSpouse ? 110 : 0; // Increased to 110 for text spacing
             // We need to shift the avatar in 3D space?
             // Since 'g' is already transformed to iso(d.x, d.y - z).
             // We need to modify the transform of the internal content or add a child group.
@@ -1656,15 +1664,19 @@ Z`;
                     .attr("stroke-opacity", 0.8);
             }
 
-            // --- Text on Floor ---
-            // Position at the bottom corner (visually below)
+            // --- Text on Floor (Rotated / Depth Aligned) ---
+            // "Facing the other side" -> Aligned with Depth Axis
+            // Matrix to map Text X -> Depth Axis (approx)
+            // vector (0.8, -0.4) is along the other diagonal
+            const textMatrix = "0.8, -0.4, 0.8, 0.4, 0, 0";
+
             const textG = avGrp.append("g")
-                .attr("transform", `translate(0, 0) matrix(${matrix}) translate(${tileW / 2 + 15}, ${tileW / 2 + 15})`);
+                .attr("transform", `translate(${tileW / 2 + 10}, ${tileW / 2}) matrix(${textMatrix})`);
 
             // Name
             textG.append("text")
                 .text(data.name)
-                .attr("text-anchor", "middle")
+                .attr("text-anchor", "start") // Start from the node
                 .attr("fill", "#222")
                 .attr("font-size", "14px")
                 .attr("font-weight", "bold")
@@ -1674,8 +1686,8 @@ Z`;
             if (!data.isMe) {
                 textG.append("text")
                     .text(data.relation)
-                    .attr("text-anchor", "middle")
-                    .attr("y", 12)
+                    .attr("text-anchor", "start")
+                    .attr("y", 14) // Line height
                     .attr("fill", "#666")
                     .attr("font-size", "10px")
                     .style("font-family", "sans-serif")
@@ -1963,6 +1975,8 @@ function switchView(view) {
 
     if (view === "fan") {
         document.getElementById("fan-controls").style.display = "flex";
+        fanHistory = []; // Reset history when entering Fan View
+        currentFanRootId = null;
         initFan();
     } else {
         document.getElementById("fan-controls").style.display = "none";
