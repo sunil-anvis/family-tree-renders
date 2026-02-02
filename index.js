@@ -502,6 +502,31 @@ function initFan(startNodeId = null) {
 
     const radius = Math.min(width, height) * 0.65;
 
+    // Helper: Text Wrapping Function
+    function wrap(text, width) {
+        text.each(function () {
+            var text = d3.select(this),
+                words = text.text().split(/\s+/).reverse(),
+                word,
+                line = [],
+                lineNumber = 0,
+                lineHeight = 1.1, // ems
+                y = text.attr("y"),
+                dy = parseFloat(text.attr("dy") || 0),
+                tspan = text.text(null).append("tspan").attr("x", 0).attr("y", y).attr("dy", dy + "em");
+            while (word = words.pop()) {
+                line.push(word);
+                tspan.text(line.join(" "));
+                if (tspan.node().getComputedTextLength() > width) {
+                    line.pop();
+                    tspan.text(line.join(" "));
+                    line = [word];
+                    tspan = text.append("tspan").attr("x", 0).attr("y", y).attr("dy", ++lineNumber * lineHeight + dy + "em").text(word);
+                }
+            }
+        });
+    }
+
     // --- 2. Build Graph (Adjacency List) ---
     const allNodesMap = new Map();
     const adj = new Map();
@@ -996,9 +1021,11 @@ function initFan(startNodeId = null) {
             // Name
             el.append("text")
                 .text(d.data.name)
-                .attr("y", -5)
+                .attr("y", -10) // Moved up slightly to accommodate multiple lines
+                .attr("dy", 0)
                 .style("font-size", "14px")
-                .style("font-weight", "bold");
+                .style("font-weight", "bold")
+                .call(wrap, 100); // Wrap width ~100px (Center circle is roughly 120px wide)
 
             // Relation (e.g., "Family Member" or "Myself")
             if (d.data.relation) {
