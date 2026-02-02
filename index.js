@@ -906,13 +906,6 @@ function initFan(startNodeId = null) {
                         console.log("Expanding tree at:", d.data.id);
                         if (currentFanRootId) fanHistory.push(currentFanRootId);
                         initFan(d.data.id);
-                    } else if (d.depth === 4) {
-                        // Keep legacy max-depth logic if we still want it, 
-                        // but dynamic threshold might supersede it.
-                        // Let's keep it for hard limit.
-                        console.log("Expanding tree at (depth limit):", d.data.id);
-                        if (currentFanRootId) fanHistory.push(currentFanRootId);
-                        initFan(d.data.id);
                     } else {
                         showModal(d);
                     }
@@ -1019,7 +1012,7 @@ function initFan(startNodeId = null) {
         }
 
         // Expand Button Text (Dynamic or Depth Limit)
-        if (d.isPlusButton || d.depth === 4) {
+        if (d.isPlusButton) {
             // Re-center for the Plus symbol to ensure it's un-rotated IF we want upright.
             // But the transform above applies rotation.
             // Let's undo rotation for the Plus sign if we want it perfect, 
