@@ -557,7 +557,8 @@ function initFan(startNodeId = null) {
                     relation: p.relation,
                     photo: p.photo,
                     isMe: (p.relation === "Myself" || p.relation === "Me"),
-                    // Add other props as needed
+                    fid: p.fid,
+                    mid: p.mid
                 });
             }
 
@@ -645,15 +646,18 @@ function initFan(startNodeId = null) {
 
                 // --- PARENTS MODE FILTER ---
                 if (ancestorMode) {
-                    const neighborData = allNodesMap.get(nid);
-                    if (neighborData) {
-                        const r = (neighborData.relation || "").toLowerCase();
-                        // Only allow Father, Mother (and Grand... variations)
-                        // This excludes Siblings (Brother/Sister), Spouses (Wife/Husband), Children (Son/Daughter), Uncles/Aunts
-                        const isParental = r.includes("father") || r.includes("mother");
-
-                        if (!isParental) return;
+                    const currentData = allNodesMap.get(id);
+                    // Check strict parentage: Is nid the Father or Mother of current node?
+                    let isParent = false;
+                    if (currentData) {
+                        const fid = currentData.fid ? currentData.fid.toString() : null;
+                        const mid = currentData.mid ? currentData.mid.toString() : null;
+                        // nid is the neighbor we are considering moving TO
+                        if (nid === fid || nid === mid) {
+                            isParent = true;
+                        }
                     }
+                    if (!isParent) return;
                 }
 
                 visited.add(nid);
