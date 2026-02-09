@@ -29,6 +29,10 @@ function initApp() {
 let width = window.innerWidth;
 let height = window.innerHeight;
 
+// Globe State
+let globeData = {};
+let projection, path, globeGroup, landGroup, stateGroup, riverGroup, cityGroup, linkGroup, nodeGroup, dragBehavior, zoomBehavior;
+
 // Main SVG Container
 const svg = d3.select("#tree-container").html("").append("svg")
     .attr("width", width)
@@ -2197,6 +2201,8 @@ function switchView(view) {
 
         if (view === "isometric") {
             init3DTree();
+        } else if (view === "globe") {
+            initGlobe();
         }
     }
 }
@@ -2235,6 +2241,8 @@ window.addEventListener("resize", () => {
 
     } else if (currentView === 'isometric') {
         init3DTree();
+    } else if (currentView === 'globe') {
+        initGlobe();
     }
 });
 
@@ -2716,4 +2724,402 @@ document.getElementById("wife-family")?.addEventListener("click", () => {
     switchView(currentView);
 });
 
+
+
+// --- 9. Globe View Logic ---
+function initGlobe() {
+    svg.selectAll("*").remove(); // Clear SVG
+    svg.on(".zoom", null); // Clear global zoom if any
+
+    // Re-create Groups (Order matters for layering)
+    // 1. Set Background for Globe View (Space Galaxy)
+    svg.style("background", "radial-gradient(circle at center, #02111b 0%, #000000 100%)");
+
+    globeGroup = svg.append("g");  // Water + Graticules
+    landGroup = svg.append("g");   // Landmasses (Countries)
+    stateGroup = svg.append("g");  // States/Provinces
+    riverGroup = svg.append("g");  // Rivers
+    linkGroup = svg.append("g");   // Links
+
+    // Cities should be above land/rivers but below nodes
+    cityGroup = svg.append("g");   // Cities
+
+    nodeGroup = svg.append("g");   // Family Nodes
+
+    // Projection Setup
+    projection = d3.geoOrthographic()
+        .scale(300)
+        .center([0, 0])
+        .rotate([-70, -20])
+        .translate([width / 2, height / 2]);
+
+    path = d3.geoPath().projection(projection);
+    const graticule = d3.geoGraticule();
+
+    // Background Sphere (Water)
+    globeGroup.append("path")
+        .datum({ type: "Sphere" })
+        .attr("class", "globe-water")
+        .attr("d", path)
+        .attr("fill", "#0077be") // Ocean Blue
+        .attr("stroke", "#005E99")
+        .attr("stroke-width", 1);
+
+    // Graticules
+    globeGroup.append("path")
+        .datum(graticule)
+        .attr("class", "globe-graticule")
+        .attr("d", path)
+        .attr("fill", "none")
+        .attr("stroke", "#ffffff")
+        .attr("stroke-width", 0.3)
+        .attr("stroke-opacity", 0.2);
+
+    // Initial Loading State
+    const loadingText = svg.append("text")
+        .attr("x", width / 2)
+        .attr("y", height / 2)
+        .attr("text-anchor", "middle")
+        .attr("fill", "white")
+        .style("font-size", "20px")
+        .text("Loading Detailed Maps...");
+
+    // Data Fetching
+    if (globeData.countries && globeData.states && globeData.rivers && globeData.cities) {
+        loadingText.remove();
+        renderLayers();
+        autoZoomToFamily();
+    } else {
+        Promise.all([
+            // Countries (Base)
+            d3.json("https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson"),
+            // States (Admin 1 - 10m)
+            d3.json("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_1_states_provinces.geojson"),
+            // Rivers (10m)
+            d3.json("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_rivers_lake_centerlines.geojson"),
+            // Cities (Populated Places - 10m)
+            d3.json("https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_populated_places.geojson")
+        ]).then(([countries, states, rivers, cities]) => {
+            globeData = { countries, states, rivers, cities };
+            loadingText.remove();
+            renderLayers();
+            autoZoomToFamily();
+        }).catch(err => {
+            console.error("Map load failed", err);
+            loadingText.text("Failed to load maps.");
+        });
+    }
+
+    function renderLayers() {
+        // 1. Countries
+        const countryFeatures = globeData.countries.features || globeData.countries;
+        landGroup.selectAll(".globe-land")
+            .data(countryFeatures)
+            .enter().append("path")
+            .attr("class", "globe-land")
+            .attr("d", path)
+            .attr("fill", "#2d6a4f") // Earth Green
+            .attr("stroke", "#40916c")
+            .attr("stroke-width", 0.5);
+
+        // Country Labels (Base Layer)
+        landGroup.selectAll(".country-label")
+            .data(countryFeatures)
+            .enter().append("text")
+            .attr("class", "country-label")
+            .attr("text-anchor", "middle")
+            .style("font-size", "14px")
+            .style("font-weight", "bold")
+            .style("font-family", "sans-serif")
+            .style("fill", "#fff")
+            .style("opacity", 0.5)
+            .style("pointer-events", "none")
+            .text(d => d.properties.name)
+            .style("display", "none");
+
+        // 2. States (Initially empty/hidden handled by updateGlobe, but we render DOM elements here)
+        stateGroup.selectAll(".globe-state")
+            .data(globeData.states.features)
+            .enter().append("path")
+            .attr("class", "globe-state")
+            .attr("d", path)
+            .attr("fill", "none")
+            .attr("stroke", "#ffffff")
+            .attr("stroke-width", 0.3)
+            .attr("stroke-opacity", 0.3)
+            .style("display", "none"); // Hidden by default
+
+        // 3. Rivers
+        riverGroup.selectAll(".globe-river")
+            .data(globeData.rivers.features)
+            .enter().append("path")
+            .attr("class", "globe-river")
+            .attr("d", path)
+            .attr("fill", "none")
+            .attr("stroke", "#4CC9F0") // River Blue
+            .attr("stroke-width", 0.5)
+            .style("display", "none"); // Hidden by default
+
+        // 4. Cities
+        // Filter to reasonable subset to avoid DOM explosion before culling loop
+        // We'll render them all but hide them
+        cityGroup.selectAll(".globe-city")
+            .data(globeData.cities.features)
+            .enter().append("circle")
+            .attr("class", "globe-city")
+            .attr("r", 1) // Tiny dots
+            .attr("fill", "#fff")
+            .style("opacity", 0.8)
+            .style("display", "none");
+
+        cityGroup.selectAll(".city-label")
+            .data(globeData.cities.features)
+            .enter().append("text")
+            .attr("class", "city-label")
+            .attr("text-anchor", "start")
+            .attr("dx", 3)
+            .attr("dy", 1)
+            .style("font-size", "6px")
+            .style("font-family", "sans-serif")
+            .style("fill", "#ddd")
+            .style("pointer-events", "none")
+            .text(d => d.properties.NAME)
+            .style("display", "none");
+    }
+
+    // Process Hierarchy for Globe Nodes (On top of everything)
+    const root = d3.hierarchy(familyData);
+    const nodes = root.descendants();
+    const links = root.links();
+
+    // Links
+    const linkElements = linkGroup.selectAll(".geo-link")
+        .data(links)
+        .enter().append("path")
+        .attr("class", "geo-link")
+        .attr("fill", "none")
+        .attr("stroke", "#FFD700")
+        .attr("stroke-width", 1.5)
+        .attr("stroke-opacity", 0.6);
+
+    // Nodes
+    const nodeElements = nodeGroup.selectAll(".geo-node")
+        .data(nodes)
+        .enter().append("g")
+        .attr("class", "geo-node")
+        .style("cursor", "pointer")
+        .on("click", (event, d) => {
+            event.stopPropagation();
+            showModal(d);
+        });
+
+    nodeElements.append("circle")
+        .attr("r", d => d.data.isMe ? 8 : 6)
+        .classed("heartbeat", d => d.data.isMe)
+        .attr("fill", d => d.data.isMe ? "#FFD700" : "#ff0000")
+        .attr("stroke", "#fff")
+        .attr("stroke-width", 2);
+
+    nodeElements.append("text")
+        .attr("y", -10)
+        .attr("text-anchor", "middle")
+        .style("fill", "white")
+        .style("font-size", "12px")
+        .style("font-weight", "bold")
+        .style("text-shadow", "0 2px 4px black")
+        .style("font-family", "sans-serif")
+        .text(d => d.data.name);
+
+    // Update Function
+    function updateGlobe() {
+        if (!globeData.countries) return;
+
+        const currentPath = d3.geoPath().projection(projection);
+        const center = projection.invert([width / 2, height / 2]);
+        const scale = projection.scale();
+
+        // 1. Base Globe & Countries
+        globeGroup.selectAll("path").attr("d", currentPath);
+
+        if (landGroup.selectAll("path").size() > 0) {
+            landGroup.selectAll("path").attr("d", currentPath);
+
+            // Country Labels (Always calculate pos, visibility depends on angle)
+            landGroup.selectAll(".country-label")
+                .each(function (d) {
+                    const el = d3.select(this);
+                    const centroid = d3.geoCentroid(d);
+                    const dist = d3.geoDistance(center, centroid);
+
+                    if (dist > 1.57) {
+                        el.style("display", "none");
+                    } else {
+                        const coords = projection(centroid);
+                        if (coords) {
+                            el.attr("transform", `translate(${coords[0]},${coords[1]})`);
+                            // Fade out countries when zoomed in to let Cities shine?
+                            // Keep them for context.
+                            el.style("display", "block");
+                        }
+                    }
+                });
+        }
+
+        // 2. States (LOD: Scale > 400)
+        if (stateGroup.selectAll("path").size() > 0) {
+            if (scale > 400) {
+                stateGroup.selectAll("path")
+                    .style("display", null) // Show
+                    .attr("d", currentPath);
+            } else {
+                stateGroup.selectAll("path").style("display", "none");
+            }
+        }
+
+        // 3. Rivers (LOD: Scale > 800)
+        if (riverGroup.selectAll("path").size() > 0) {
+            if (scale > 800) {
+                riverGroup.selectAll("path")
+                    .style("display", null)
+                    .attr("d", currentPath);
+            } else {
+                riverGroup.selectAll("path").style("display", "none");
+            }
+        }
+
+        // 4. Cities (LOD: Scale > 1000)
+        if (cityGroup.selectAll("circle").size() > 0) {
+            if (scale > 1000) {
+                cityGroup.selectAll(".globe-city")
+                    .each(function (d) {
+                        const el = d3.select(this);
+                        // Points are easy: coords are in geometry
+                        const coords = d.geometry.coordinates;
+                        const dist = d3.geoDistance(center, coords);
+
+                        // Strict clipping + Zoom culling (hide small cities if not super zoomed?)
+                        // For now, just backface culling
+                        if (dist > 1.57) {
+                            el.style("display", "none");
+                        } else {
+                            const p = projection(coords);
+                            if (p) {
+                                el.attr("cx", p[0]).attr("cy", p[1]);
+                                el.style("display", "block");
+                            }
+                        }
+                    });
+
+                cityGroup.selectAll(".city-label")
+                    .each(function (d) {
+                        const el = d3.select(this);
+                        const coords = d.geometry.coordinates;
+                        const dist = d3.geoDistance(center, coords);
+
+                        if (dist > 1.57) {
+                            el.style("display", "none");
+                        } else {
+                            const p = projection(coords);
+                            if (p) {
+                                el.attr("x", p[0]).attr("y", p[1]);
+                                // Show label only if it's a major city OR very high zoom
+                                // d.properties.SCALERANK can help (lower is bigger)
+                                const rank = d.properties.SCALERANK || 10;
+                                if (scale > 3000 || rank < 3) {
+                                    el.style("display", "block");
+                                } else {
+                                    el.style("display", "none");
+                                }
+                            }
+                        }
+                    });
+            } else {
+                cityGroup.selectAll(".globe-city").style("display", "none");
+                cityGroup.selectAll(".city-label").style("display", "none");
+            }
+        }
+
+
+        // Nodes & Links (Always visible if front-facing)
+        linkElements.attr("d", d => {
+            const source = d.source.data.coords;
+            const target = d.target.data.coords;
+            return currentPath({
+                type: "LineString",
+                coordinates: [source, target]
+            });
+        });
+
+        nodeElements.attr("transform", d => {
+            const coords = projection(d.data.coords);
+            return coords ? `translate(${coords[0]},${coords[1]})` : "translate(0,0)";
+        });
+
+        nodeElements.style("display", d => {
+            const dist = d3.geoDistance(center, d.data.coords);
+            return dist > 1.57 ? "none" : "block";
+        });
+    }
+
+    // Interaction
+    dragBehavior = d3.drag()
+        .on("drag", (event) => {
+            const rotate = projection.rotate();
+            const k = 75 / projection.scale();
+            projection.rotate([
+                rotate[0] + event.dx * k,
+                rotate[1] - event.dy * k
+            ]);
+            updateGlobe();
+        });
+
+    zoomBehavior = d3.zoom()
+        .scaleExtent([200, 10000]) // Allow SUPER deep zoom (10k)
+        .on("zoom", (event) => {
+            projection.scale(event.transform.k);
+            updateGlobe();
+        });
+
+    svg.call(dragBehavior);
+    svg.call(zoomBehavior).call(zoomBehavior.transform, d3.zoomIdentity.scale(projection.scale()));
+
+    // Zoom Controls Functionality
+    d3.select("#zoom-in").on("click", () => {
+        svg.transition().duration(500).call(zoomBehavior.scaleBy, 1.5);
+    });
+
+    d3.select("#zoom-out").on("click", () => {
+        svg.transition().duration(500).call(zoomBehavior.scaleBy, 0.66);
+    });
+
+
+    function autoZoomToFamily() {
+        // Collect all coordinates
+        const coords = [];
+        const traverse = (node) => {
+            if (node.coords) coords.push(node.coords);
+            if (node.children) node.children.forEach(traverse);
+        };
+        traverse(familyData);
+
+        if (coords.length === 0) return;
+
+        // Calculate Centroid
+        const center = d3.geoCentroid({
+            type: "MultiPoint",
+            coordinates: coords
+        });
+
+        // Rotate to center
+        projection.rotate([-center[0], -center[1]]);
+
+        // Super Zoom to show details!
+        const targetScale = 2500; // Deep zoom to see cities
+        projection.scale(targetScale);
+
+        // Update view
+        svg.call(zoomBehavior.transform, d3.zoomIdentity.scale(targetScale));
+        updateGlobe();
+    }
+}
 

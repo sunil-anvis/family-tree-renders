@@ -578,39 +578,89 @@ function initFan(startNodeId = null) {
         const relationText = d.data.relation;
         const name = d.data.name;
 
-        // Dynamic Font Size
-        const angle = d.x1 - d.x0; // Radians
-        let fontSize = 8; // Reduced base
+        // --- Calculate Available Space ---
+        const radialThickness = d.y1 - d.y0 - 10; // 5px padding
+        const midRadius = (d.y0 + d.y1) / 2;
+        const arcLength = (d.x1 - d.x0) * midRadius;
 
-        // Scale down for smaller slices
-        if (angle < 0.25) fontSize = 7;
-        if (angle < 0.20) fontSize = 6;
-        if (angle < 0.15) fontSize = 5;
-        if (angle < 0.10) fontSize = 4;
-        if (angle < 0.06) fontSize = 3;
-        if (angle < 0.03) fontSize = 2; // Tiny
+        let availableWidth, availableHeight;
 
-        // Apply
+        // Determine Orientation based on Depth
+        // Depth 1 is Tangential (Text runs along the ring)
+        // Depth > 1 is Radial (Text runs outward/inward along radius)
+        const isTangential = (d.depth === 1);
+
+        if (isTangential) {
+            availableWidth = arcLength - 10; // Padding
+            availableHeight = radialThickness;
+        } else {
+            availableWidth = radialThickness;
+            availableHeight = arcLength;
+        }
+
+        // --- 1. Font Sizing ---
+        let nameFontSize = 10;
+        let relFontSize = 8;
+
+        // Constrain height (Font Size)
+        // We have 2 lines: Name (~60%) + Relation (~40%)
+        const maxTextHeight = Math.max(availableHeight * 0.8, 2);
+
+        // Standard sizing
+        nameFontSize = Math.min(14, maxTextHeight * 0.6);
+        relFontSize = Math.min(10, maxTextHeight * 0.4);
+
+        // If height is tight, scale down
+        // Ensure relation is not bigger than name
+        if (relFontSize > nameFontSize) relFontSize = nameFontSize * 0.8;
+
+        // Min sizes
+        if (nameFontSize < 3) nameFontSize = 0;
+        if (relFontSize < 2.5) relFontSize = 0;
+
+        // --- 2. Truncation Helper ---
+        function truncateAndAppend(textObj, fullText, maxWidth) {
+            let currentLen = textObj.node().getComputedTextLength();
+            if (currentLen <= maxWidth) return;
+
+            let textVal = fullText;
+            // Binary search or iterative? Iterative is fine for small strings.
+            // Faster approach: guess based on char width?
+            // Let's stick to iterative to be properly "System 2" precise as requested.
+
+            while (currentLen > maxWidth && textVal.length > 0) {
+                // Remove chunks? one char is safe.
+                textVal = textVal.slice(0, -1);
+                textObj.text(textVal + "...");
+                currentLen = textObj.node().getComputedTextLength();
+            }
+        }
+
         el.attr("text-anchor", "middle")
             .style("font-family", "sans-serif")
             .style("fill", "#000");
 
-        // Name
-        el.append("text")
-            .text(name)
-            .attr("y", -fontSize / 2) // Center logic
-            .style("font-size", fontSize + "px")
-            .style("font-weight", "bold")
-            .style("pointer-events", "none");
+        if (nameFontSize > 0) {
+            const nameText = el.append("text")
+                .text(name)
+                .attr("y", -nameFontSize * 0.2)
+                .style("font-size", nameFontSize + "px")
+                .style("font-weight", "bold")
+                .style("pointer-events", "none");
 
-        // Relation (Smaller than Name)
-        const relSize = Math.max(3, fontSize - 2);
+            truncateAndAppend(nameText, name, availableWidth);
+        }
 
-        el.append("text").text(relationText)
-            .attr("y", fontSize / 2 + 2)
-            .style("font-size", relSize + "px")
-            .style("fill", "#444")
-            .style("pointer-events", "none");
+        if (relFontSize > 0) {
+            const relText = el.append("text")
+                .text(relationText)
+                .attr("y", nameFontSize * 0.8 + 2)
+                .style("font-size", relFontSize + "px")
+                .style("fill", "#444")
+                .style("pointer-events", "none");
+
+            truncateAndAppend(relText, relationText, availableWidth);
+        }
     });
 
     // Zoom Logic

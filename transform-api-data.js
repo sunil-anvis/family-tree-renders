@@ -33,6 +33,8 @@ function transformApiDataToHierarchy(apiResponse, focusId = null) {
                 fid: p.fid ? String(p.fid) : null,
                 mid: p.mid ? String(p.mid) : null,
                 pids: (p.pids || []).map(String),
+                coords: p.coords,
+                location: p.location,
                 children: []
             });
         });
