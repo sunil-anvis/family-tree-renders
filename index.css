@@ -566,5 +566,47 @@ body {
 
 .heartbeat {
     animation: heartbeat 1.5s infinite ease-in-out;
-    /* Removed transform-origin as it's not needed for translation */
+
+
+    /* Globe View User Pins */
+    .user-pin {
+        width: 12px;
+        height: 12px;
+        background-color: #fff;
+        border: 1px solid #ff0055;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        transition: transform 0.2s, z-index 0.2s;
+    }
+
+    .user-pin.is-me {
+        width: 5px;
+        height: 5px;
+        border-color: #FFD700;
+        z-index: 10;
+    }
+
+    .user-pin:hover {
+        transform: rotate(-45deg) scale(2.0);
+        /* Larger zoom on hover so it's viewable */
+        z-index: 100;
+    }
+
+    .user-pin img {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        transform: rotate(45deg);
+        object-fit: cover;
+    }
+
+    .user-pin.is-me img {
+        width: 14px;
+        height: 14px;
+    }
 }
