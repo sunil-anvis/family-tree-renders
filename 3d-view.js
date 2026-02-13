@@ -279,11 +279,12 @@ Z`;
         const sideColor = d3.hsl(baseColor);
         sideColor.l += 0.15; // Side is lighter
 
-        // Render Shadow
+        // Render Shadow (Initially Hidden)
         shadowLayer.append("path")
             .attr("d", topPath)
             .attr("fill", "black")
-            .attr("opacity", 0.1)
+            .attr("opacity", 0) // Hidden
+            .attr("class", `shadow-d-${siblings[0].depth}`)
             .attr("filter", "url(#drop-shadow-blur)")
             .attr("transform", "translate(0, 0)");
 
@@ -304,8 +305,11 @@ Z`;
         // Top is at Layout Y - Extrusion (Air).
 
         // So we translate by -thisExtrusion scaled by Z factor
+        // So we translate by -thisExtrusion scaled by Z factor
         const grp = blockLayer.append("g")
-            .attr("transform", `translate(0, ${- thisExtrusion * params.zScale})`);
+            .attr("transform", `translate(0, ${- thisExtrusion * params.zScale})`)
+            .attr("opacity", 0) // Hidden
+            .attr("class", `block-d-${siblings[0].depth}`);
 
         // Side Wall (Lighter Tint)
         grp.append("path")
@@ -380,7 +384,7 @@ Z`;
         // S -> C1 -> C2 -> T
 
         // Offset start/end to be at the block boundary_
-        const yOffset = 60; // Just outside the avatar area
+        const yOffset = 30; // Closer to avatar
 
         const p0 = project(linkSx, sy + yOffset, sz);       // Start (Bottom of source block)
         const p1 = project(linkSx, midY, sz);     // Corner 1 vertical
@@ -447,11 +451,12 @@ Z`;
             const targetColor = getGenColor(d.target);
             return d3.color(targetColor).darker(1.2).hex();
         })
-        .attr("stroke-width", 5) // Significantly thicker
+        .attr("stroke-width", 4) // Slightly clear stroke
         .attr("stroke-linecap", "round")
         .attr("stroke-linejoin", "round")
         .attr("transform", `translate(0, 0)`) // No global shift needed if Z is correct
-        .attr("opacity", 0.9);
+        .attr("opacity", 0) // Hidden
+        .attr("class", d => `link-source-${d.source.data.id} link-target-${d.target.data.id} iso-link`);
 
 
     // --- Avatars (Nodes) ---
@@ -466,6 +471,8 @@ Z`;
             const z = getExtrusion(d.depth);
             return `translate(${ix}, ${iy - z * params.zScale})`;
         })
+        .attr("opacity", 0) // Hidden initially via Attribute
+        .attr("class", d => `node-group node-d-${d.depth} ${d.data.isMe ? 'node-me' : ''}`)
         .style("cursor", "url('https://cdn-icons-png.flaticon.com/32/1442/1442300.png'), auto");
 
 
@@ -750,30 +757,102 @@ Z`;
 
     svg.call(zoom);
 
-    // Auto Zoom to Fit (3D)
-    // Use timeout to allow layout to settle (calculating BBox of complex paths)
-    setTimeout(() => {
-        try {
-            const bounds = g.node().getBBox();
-            if (bounds.width > 0 && bounds.height > 0) {
-                const scale = Math.min(1.0, (width - 100) / bounds.width, (height - 100) / bounds.height);
-                const midX = bounds.x + bounds.width / 2;
-                const midY = bounds.y + bounds.height / 2;
+    // --- ANIMATION SEQUENCE ---
+    // Replaces static auto-zoom
 
-                const t = d3.zoomIdentity
-                    .translate(width / 2 - midX * scale, height / 2 - midY * scale)
-                    .scale(scale);
+    const playStartupAnimation = () => {
+        // 1. Find Me
+        const meNode = root.descendants().find(d => d.data.isMe);
+        // Fallback to root if Me not found
+        const centerNode = meNode || root;
 
-                svg.transition().duration(750).call(zoom.transform, t);
-            } else {
-                // Fallback
-                const initialTransform = d3.zoomIdentity.translate(width / 2, 100).scale(0.5);
-                svg.call(zoom.transform, initialTransform);
+        const [mx, my] = toIso(centerNode.x, centerNode.y);
+        const mz = getExtrusion(centerNode.depth);
+        const centerPos = [mx, my - mz * params.zScale];
+
+        // 2. Initial Camera Position (Zoomed into "Me")
+        const startScale = 1.2;
+        const startX = width / 2 - centerPos[0] * startScale;
+        const startY = height / 2 - centerPos[1] * startScale;
+
+        const startTransform = d3.zoomIdentity.translate(startX, startY).scale(startScale);
+        svg.call(zoom.transform, startTransform);
+
+        // 3. Reveal "Me" (and my block)
+        const transitionTime = 2000; // Slower Reveal
+
+        // Reveal Blocks & Shadows for Me's generation
+        d3.selectAll(`.block-d-${centerNode.depth}`).transition().duration(2000).style("opacity", 1);
+        d3.selectAll(`.shadow-d-${centerNode.depth}`).transition().duration(2000).style("opacity", 0.1);
+        d3.selectAll(`.node-d-${centerNode.depth}`).transition().duration(2000).style("opacity", 1);
+
+
+        // 4. Calculate Final BBox for "Overview"
+        setTimeout(() => {
+            try {
+                const bounds = g.node().getBBox();
+                if (bounds.width > 0) {
+                    const fitScale = Math.min(0.9, (width - 100) / bounds.width, (height - 100) / bounds.height);
+                    const midX = bounds.x + bounds.width / 2;
+                    const midY = bounds.y + bounds.height / 2;
+
+                    const endX = width / 2 - midX * fitScale;
+                    const endY = height / 2 - midY * fitScale;
+
+                    const endTransform = d3.zoomIdentity.translate(endX, endY).scale(fitScale);
+
+                    // Camera Move Animation (Zoom Out) - SLOWER (4s)
+                    svg.transition()
+                        .duration(4000)
+                        .ease(d3.easeCubicInOut)
+                        .call(zoom.transform, endTransform);
+
+                    // 5. Sequential Reveal of everything else
+                    // Links drawing effect
+                    linkLayer.selectAll(".iso-link")
+                        .transition()
+                        .delay((d, i) => 1500 + d.source.depth * 600) // Slower Ripple out
+                        .duration(2500) // Slower draw
+                        .attr("opacity", 1)
+                        .attrTween("stroke-dasharray", function () {
+                            const len = this.getTotalLength();
+                            return function (t) { return (d3.interpolateString("0," + len, len + "," + len))(t) };
+                        })
+                        .on("end", function () {
+                            d3.select(this).attr("stroke-dasharray", null);
+                        });
+
+                    // Reveal other blocks/nodes by depth
+                    const maxDepth = d3.max(root.descendants(), d => d.depth);
+                    for (let d = 0; d <= maxDepth; d++) {
+                        if (d === centerNode.depth) continue; // Already shown
+
+                        // Slower staggering
+                        const delay = 2000 + Math.abs(d - centerNode.depth) * 1000;
+
+                        d3.selectAll(`.block-d-${d}`).transition().delay(delay).duration(2000).style("opacity", 1);
+                        d3.selectAll(`.shadow-d-${d}`).transition().delay(delay).duration(2000).style("opacity", 0.1);
+                        d3.selectAll(`.node-d-${d}`)
+                            .transition()
+                            .delay(delay + 300) // Nodes slightly after blocks
+                            .duration(2000)
+                            .style("opacity", 1);
+                    }
+
+                    // Safety: Ensure everything is visible after animation finishes
+                    setTimeout(() => {
+                        d3.selectAll(".node-group").transition().duration(500).style("opacity", 1);
+                        d3.selectAll(".iso-link").transition().duration(500).attr("opacity", 1).attr("stroke-dasharray", null);
+                    }, 8000);
+
+                }
+            } catch (e) {
+                console.error("Animation error", e);
             }
-        } catch (e) {
-            console.error("Auto-zoom failed", e);
-            const initialTransform = d3.zoomIdentity.translate(width / 2, 100).scale(0.5);
-            svg.call(zoom.transform, initialTransform);
-        }
-    }, 50);
+        }, 1500); // Wait 1.5s before zooming out
+
+    };
+
+    // Trigger
+    playStartupAnimation();
 }

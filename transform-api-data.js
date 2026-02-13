@@ -226,3 +226,104 @@ function transformFamilyData(data, focusId = null) {
     }
     return data;
 }
+
+/**
+ * Filtered Transformation: Individual Family View
+ * "Individual Family" = Root (Me) + Parents + Siblings + Wife + Kids
+ * 
+ * Logic:
+ * 1. Find Me (Focus)
+ * 2. Find Parents (Ancestor Root for this view)
+ * 3. Construct Tree: Parent -> [Siblings, Me -> [Kids]]
+ */
+function transformToIndividualFamily(apiResponse, focusId = null) {
+    const apiData = apiResponse.data || apiResponse;
+    if (!Array.isArray(apiData)) return null;
+
+    // 1. Ensure Map is Built (Reuse logic or rebuild)
+    // We force a rebuild/check by calling the internal builder if map is empty
+    // But since _personMap is global, we can check it. 
+    // If null, we run the standard transform first to populate it.
+    if (!_personMap) {
+        transformApiDataToHierarchy(apiResponse);
+    }
+
+    // 2. Identify Focus Person
+    let focusPerson = null;
+    if (focusId && _personMap.has(String(focusId))) {
+        focusPerson = _personMap.get(String(focusId));
+    } else {
+        focusPerson = [..._personMap.values()].find(p => p.isMe);
+    }
+    if (!focusPerson) return null;
+
+    // 3. Identify Root of this specific view (The Father/Mother)
+    // If no parents, the Focus Person is the root.
+    let viewRoot = null;
+    if (focusPerson.fid && _personMap.has(focusPerson.fid)) {
+        viewRoot = _personMap.get(focusPerson.fid);
+    } else if (focusPerson.mid && _personMap.has(focusPerson.mid)) {
+        viewRoot = _personMap.get(focusPerson.mid);
+    } else {
+        viewRoot = focusPerson;
+    }
+
+    // 4. Construct the Filtered Tree (Clone nodes to avoid breaking global cache)
+    // Helper to shallow clone and reset children
+    const clone = (n) => ({ ...n, children: [] });
+
+    const newRoot = clone(viewRoot);
+
+    // If Root is Parent, add all their children (Siblings + Me)
+    // We need to look up the ORIGINAL children from the map to get siblings
+    // The _personMap nodes already have 'children' array populated by Phase 1 of standard transform.
+    // So we iterate viewRoot.children
+
+    // Check if viewRoot is actually the Parent (not Me)
+    if (viewRoot.id !== focusPerson.id) {
+        // We are at Parent Level
+        // Add Spouse (Mother) - already in 'spouse' property from standard transform? 
+        // Yes, Phase 1 step 3 attaches spouse. We just cloned it, so newRoot.spouse exists.
+
+        if (viewRoot.children && viewRoot.children.length) {
+            viewRoot.children.forEach(child => {
+                // This child is either Me or a Sibling
+                const newChild = clone(child);
+
+                if (child.id === focusPerson.id) {
+                    // It's ME!
+                    // Add My Spouse (Keep existing spouse prop)
+                    // Add My Children
+                    if (child.children && child.children.length) {
+                        child.children.forEach(grandChild => {
+                            newChild.children.push(clone(grandChild));
+                        });
+                    }
+                } else {
+                    // It's a Sibling
+                    // "Thats it" -> No children for siblings.
+                    // Also maybe no spouse? User said "siblings, wife and kids". Wife of Root (Me). 
+                    // So we probably strip spouse from siblings to be strict?
+                    // "siblings" usually implies just the person.
+                    // Let's keep it simple: Delete spouse from sibling clone if we want to be strict.
+                    // Use 'delete newChild.spouse' if needed. 
+                    // For now, I'll leave spouse if it exists, as it explains the sibling better, 
+                    // but definitely NO children.
+                }
+
+                newRoot.children.push(newChild);
+            });
+        }
+    } else {
+        // Me is Root (No Parents found)
+        // Just add My Children
+        if (viewRoot.children && viewRoot.children.length) {
+            viewRoot.children.forEach(child => {
+                newRoot.children.push(clone(child));
+            });
+        }
+    }
+
+    return cleanTree(newRoot, new Set()); // Clean up ids/circular refs usually, but our clones are fresh. 
+    // cleanTree removes 'fid', 'mid', 'pids'. Useful for D3.
+}

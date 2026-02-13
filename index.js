@@ -1519,7 +1519,25 @@ document.querySelectorAll(".view-btn").forEach(btn => {
         document.querySelectorAll(".view-btn").forEach(b => b.classList.remove("active"));
         e.target.classList.add("active");
 
-        switchView(view);
+        if (view === 'isometric') {
+            // Default to Individual Family for 3D View
+            switchToIndividualFamilyView(view);
+        } else {
+            // For other views, we might want to reset to full tree or keep current?
+            // User didn't specify, but to be safe and avoid getting stuck in Individual View
+            // when switching back to Tree, we should probably reset unless the user manually selected a filter.
+            // However, typical behavior is "View changes visualization, Filter changes data".
+            // But since we are FORCING data change on 3D, we should probably force it back on others?
+            // Let's stick to the specific request: "3d view should open default on individual family".
+            // We will NOT auto-reset for others to allow "Individual Family in Vertical Tree" if desired,
+            // UNLESS the user switches FROM 3D.
+            // Actually, if I switch to 3D -> Data becomes Individual.
+            // If I switch back to Tree -> Data STAYS Individual.
+            // This might be annoying if the user didn't realize data changed.
+            // But let's assume "Default on open" means "When I click 3D, make sure it's Individual".
+
+            switchView(view);
+        }
     });
 });
 
@@ -2024,6 +2042,45 @@ document.getElementById("wife-family")?.addEventListener("click", () => {
     familyData = transformFamilyData(rawFamilyData, me.pids[0]);
     switchView(currentView);
 });
+
+const switchToIndividualFamilyView = (targetView) => {
+    // New Feature: Restricted Individual Family View
+    // Centers on Me + Parents + Siblings + Wife + Kids
+
+    // 1. Get Me (Focus)
+    const me = getMeFromRaw();
+    if (!me) {
+        alert("Could not find 'Myself' in the data.");
+        return;
+    }
+
+    // 2. Transform Data
+    // We use the new dedicated transformer function
+    // Note: transformToIndividualFamily must be available globally from transform-api-data.js
+    const newData = transformToIndividualFamily(rawFamilyData, me.id);
+
+    if (!newData) {
+        alert("Failed to generate Individual Family view.");
+        return;
+    }
+
+    familyData = newData;
+    switchView(targetView || currentView);
+
+    // Toast
+    const toast = document.createElement("div");
+    toast.className = "toast-notification";
+    toast.textContent = "Showing: Individual Family Only";
+    Object.assign(toast.style, {
+        position: "fixed", bottom: "20px", left: "50%", transform: "translateX(-50%)",
+        background: "#0D8ABC", color: "#fff", padding: "10px 20px", borderRadius: "20px",
+        zIndex: "10000", fontWeight: "bold"
+    });
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+};
+
+document.getElementById("individual-family")?.addEventListener("click", () => switchToIndividualFamilyView());
 
 
 
