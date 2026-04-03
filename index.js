@@ -30,12 +30,10 @@ let height = window.innerHeight;
 window.addEventListener("resize", () => {
   width = window.innerWidth;
   height = window.innerHeight;
-  
+
   // Update SVG attributes
-  d3.select("#tree-container svg")
-    .attr("width", width)
-    .attr("height", height);
-  
+  d3.select("#tree-container svg").attr("width", width).attr("height", height);
+
   // Re-render current view if active
   if (typeof currentView !== "undefined" && typeof switchView === "function") {
     switchView(currentView);
@@ -577,7 +575,10 @@ function initFan(startNodeId = null) {
   svg.on(".zoom", null);
 
   // 3. Set Background for Fan View based on Theme
-  const bgColor = (typeof window.isDarkMode !== "undefined" && !window.isDarkMode) ? "#ffffff" : "#171717";
+  const bgColor =
+    typeof window.isDarkMode !== "undefined" && !window.isDarkMode
+      ? "#ffffff"
+      : "#171717";
   svg.style("background", bgColor);
 
   // 4. Responsive Radius Calculation
@@ -773,22 +774,13 @@ function initFan(startNodeId = null) {
   const fanRoot = d3.hierarchy(newRoot);
 
   // Color Palette Theme Split
-  const lightColors = [
-    "#b5e2ff",
-    "#ffa4c6",
-    "#a6f6af",
-    "#ffd1a4",
-    "#dff2cd",
-  ];
-  const darkColors = [
-    "#4daee5",
-    "#e26a97",
-    "#59c864",
-    "#dc9856",
-    "#8eb170",
-  ];
-  
-  const genColors = (typeof window.isDarkMode !== "undefined" && !window.isDarkMode) ? lightColors : darkColors;
+  const lightColors = ["#b5e2ff", "#ffa4c6", "#a6f6af", "#ffd1a4", "#dff2cd"];
+  const darkColors = ["#4daee5", "#e26a97", "#59c864", "#dc9856", "#8eb170"];
+
+  const genColors =
+    typeof window.isDarkMode !== "undefined" && !window.isDarkMode
+      ? lightColors
+      : darkColors;
   const getGenColor = (d) => genColors[d.depth % genColors.length];
 
   // Assign Colors
@@ -816,7 +808,8 @@ function initFan(startNodeId = null) {
   // Let's do a Full Circle Sunburst for maximum space.
 
   // 1. Assign "Value" to leaves to determine angular width
-  fanRoot.count(); // Sets .value to number of leaves
+  // Use total subtree size (node count) as weight for a more accurate "busy-ness" metric
+  fanRoot.sum(d => 1);
 
   // Override Layout
   // Assign x0, x1 (Angle) and y0, y1 (Radius)
@@ -899,19 +892,68 @@ function initFan(startNodeId = null) {
       // is acceptable OR that we need to fake it for the demo if the user wants "Parents".
       // The request is about the "+" feature. I will stick to the generic partition logic which works for whatever `fanRoot` contains.
 
-      // Initialize Root's children angular range
+      // Initialize Root's children angular range with weighted distribution
       if (d.children) {
         const range = d.x1 - d.x0;
-        const step = range / d.children.length;
+        const totalValue = d3.sum(d.children, c => c.value);
+        
+        const SAFE_MIN_ANGLE = 0.08; 
+        const childAngles = new Array(d.children.length);
+        const fixedIndices = new Set();
+        let remainingRange = range;
+        let remainingValue = totalValue;
+
+        // 1. Assign SAFE_MIN_ANGLE to any segment that would otherwise be too thin.
+        let changed = true;
+        while (changed) {
+          changed = false;
+          d.children.forEach((child, i) => {
+            if (fixedIndices.has(i)) return;
+            const proportionalAngle = (child.value / remainingValue) * remainingRange;
+            if (proportionalAngle < SAFE_MIN_ANGLE) {
+              childAngles[i] = SAFE_MIN_ANGLE;
+              remainingRange -= SAFE_MIN_ANGLE;
+              remainingValue -= child.value;
+              fixedIndices.add(i);
+              changed = true;
+            }
+          });
+        }
+
+        // 2. Distribute remaining range among those NOT fixed to min.
+        if (fixedIndices.size < d.children.length) {
+          d.children.forEach((child, i) => {
+            if (!fixedIndices.has(i)) {
+              childAngles[i] = (child.value / remainingValue) * remainingRange;
+            }
+          });
+        } else {
+          // --- FULL COVERAGE FIX ---
+          const fairShare = range / d.children.length;
+          d.children.forEach((child, i) => {
+            childAngles[i] = fairShare;
+          });
+        }
+
+        // 3. Final coordinate assignment
+        let runningAngle = d.x0;
         d.children.forEach((child, i) => {
-          child.x0 = d.x0 + i * step;
-          child.x1 = d.x0 + (i + 1) * step;
+          const angle = childAngles[i];
+          child.x0 = runningAngle;
+          child.x1 = runningAngle + angle;
+          runningAngle += angle;
+
           // Init Y for filter check
           const rStart = depthStartRadius[child.depth] || child.depth * 50;
           const rThick = ringThickness[child.depth] || 50;
-          child.y0 = rStart + 5;
-          child.y1 = rStart + rThick - 5;
+          child.y0 = rStart + 6; // Increased radial spacing for premium look
+          child.y1 = rStart + rThick - 6;
         });
+
+        // --- SPACE FILLING ANCHOR ---
+        if (d.children.length > 0) {
+          d.children[d.children.length - 1].x1 = d.x1;
+        }
       }
 
       return;
@@ -928,45 +970,95 @@ function initFan(startNodeId = null) {
       }
 
       const range = d.x1 - d.x0;
-      const step = range / d.children.length;
+      const totalValue = d3.sum(d.children, c => c.value);
+      
+      // SAFE_MIN_ANGLE: Must be larger than padAngle (0.02) to be visible.
+      const SAFE_MIN_ANGLE = 0.08; 
+      const totalNeededMin = d.children.length * SAFE_MIN_ANGLE;
 
-      // --- THE PLUS FEATURE LOGIC ---
-      // Check if the children would be too thin
-      if (step < MIN_ANGLE_THRESHOLD) {
-        // New Logic: Don't hide the parent ("Mother").
-        // Instead, mark children as hidden and create a NEW "Plus" node in the child ring.
-
-        d.hasHiddenChildren = true; // Flag for logic, but doesn't affect parent render
+      // --- THE ROBUST THRESHOLD CHECK ---
+      // If parent arc is smaller than the minimum space needed for all children, collapse to "+".
+      if (range < totalNeededMin || (range / d.children.length) < MIN_ANGLE_THRESHOLD) {
+        d.hasHiddenChildren = true;
         d.children.forEach((c) => (c.isSystemHidden = true));
 
-        // Create Plus Node
-        const rStart = depthStartRadius[d.depth + 1] || (d.depth + 1) * 80; // Fallback if out of bounds
+        const rStart = depthStartRadius[d.depth + 1] || (d.depth + 1) * 80;
         const rThick = ringThickness[d.depth + 1] || 60;
 
         const plusNode = {
-          data: { id: d.data.id, name: "+", isPlus: true }, // Use parent ID for expansion
+          data: { id: d.data.id, name: "+", isPlus: true },
           depth: d.depth + 1,
           x0: d.x0,
           x1: d.x1,
           y0: rStart + 5,
           y1: rStart + rThick - 5,
-          color: "#333", // Distinct color for button
+          color: "#333",
           isPlusButton: true,
           parent: d,
         };
         plusNodes.push(plusNode);
       } else {
-        // Distribute normally
+        // --- PROPORTIONAL MINIMAL SPACE ALGORITHM ---
+        let remainingRange = range;
+        let remainingValue = totalValue;
+        
+        const childAngles = new Array(d.children.length);
+        const fixedIndices = new Set();
+
+        // 1. Assign SAFE_MIN_ANGLE to any segment that would otherwise be too thin.
+        let changed = true;
+        while (changed) {
+          changed = false;
+          const currentAvgRange = remainingRange / (d.children.length - fixedIndices.size);
+          
+          d.children.forEach((child, i) => {
+            if (fixedIndices.has(i)) return;
+            
+            const proportionalAngle = (child.value / remainingValue) * remainingRange;
+            if (proportionalAngle < SAFE_MIN_ANGLE) {
+              childAngles[i] = SAFE_MIN_ANGLE;
+              remainingRange -= SAFE_MIN_ANGLE;
+              remainingValue -= child.value;
+              fixedIndices.add(i);
+              changed = true;
+            }
+          });
+        }
+
+        // 2. Distribute remaining range among the bigger segments.
+        if (fixedIndices.size < d.children.length) {
+          d.children.forEach((child, i) => {
+            if (!fixedIndices.has(i)) {
+              childAngles[i] = (child.value / remainingValue) * remainingRange;
+            }
+          });
+        } else {
+          // --- FULL COVERAGE FIX ---
+          const fairShare = range / d.children.length;
+          d.children.forEach((child, i) => {
+            childAngles[i] = fairShare;
+          });
+        }
+
+        // 3. Final coordinate assignment
+        let runningAngle = d.x0;
         d.children.forEach((child, i) => {
-          child.x0 = d.x0 + i * step;
-          child.x1 = d.x0 + (i + 1) * step;
+          const angle = childAngles[i];
+          child.x0 = runningAngle;
+          child.x1 = runningAngle + angle;
+          runningAngle += angle;
 
           const rStart = depthStartRadius[child.depth];
           const rThick = ringThickness[child.depth];
 
-          child.y0 = rStart + 5;
-          child.y1 = rStart + rThick - 5;
+          child.y0 = rStart + 6; // Increased radial spacing for premium look
+          child.y1 = rStart + rThick - 6;
         });
+
+        // --- SPACE FILLING ANCHOR ---
+        if (d.children.length > 0) {
+          d.children[d.children.length - 1].x1 = d.x1;
+        }
       }
     }
   });
@@ -977,8 +1069,12 @@ function initFan(startNodeId = null) {
     .endAngle((d) => d.x1)
     .innerRadius((d) => d.y0)
     .outerRadius((d) => d.y1)
-    .padAngle(0.02)
-    .cornerRadius(5);
+    .padAngle(0.005) // Drastically reduced to ensure segments touch and fill space
+    .cornerRadius((d) => {
+      const angle = d.x1 - d.x0;
+      if (angle < 0.1) return 0; // No corners for thin segments to prevent visual gaps
+      return 4;
+    });
 
   // --- 3D Scene Setup (Stacked Layers) ---
   const scene = svg
@@ -1029,16 +1125,38 @@ function initFan(startNodeId = null) {
       .enter()
       .append("path")
       .attr("class", "fan-segment")
-      .attr("d", arc)
+      .attr("d", (d) => {
+        // --- PLUS BUTTON GEOMETRY REDESIGN (Circular/Small Square) ---
+        if (d.isPlusButton) {
+          const midAngle = (d.x0 + d.x1) / 2;
+          const r = (d.y0 + d.y1) / 2;
+          const size = Math.min(15, (d.x1 - d.x0) * r * 0.8); // Responsive sizing
+          
+          // Render as a small rounded rectangle centered in the arc's bounding box
+          // This prevents overlapping black blocks.
+          return d3.arc()({
+            startAngle: midAngle - size/(2*r),
+            endAngle: midAngle + size/(2*r),
+            innerRadius: r - size/2,
+            outerRadius: r + size/2,
+            padAngle: 0,
+            cornerRadius: 4
+          });
+        }
+        return arc(d);
+      })
       .style("fill", (d) => {
         if (d.isPlusButton) return "#333";
-
-        // Normal coloring
-
-        return isTop ? d.color : darken(d.color, 0.5 + (NUM_LAYERS - i) * 0.1);
+        return isTop ? (d.color || "#ccc") : darken(d.color || "#ccc", 0.5 + (NUM_LAYERS - i) * 0.1);
       })
       .style("stroke", (d) => (isTop ? "#333" : "none"))
-      .style("stroke-width", "0.5px");
+      .style("stroke-width", "0.5px")
+      .style("opacity", (d) => {
+        // --- 3D RENDERING SAFETY (RELAXED) ---
+        // Allow 3D depth to show on narrower segments (lowered from 0.1 to 0.04)
+        if (!isTop && (d.x1 - d.x0) < 0.04) return 0;
+        return 1;
+      });
 
     if (isTop) {
       paths
@@ -1122,16 +1240,18 @@ function initFan(startNodeId = null) {
 
       // 2. Others: Rotate to align with slice
       let rotate = 0;
+      const angle = d.x1 - d.x0;
+      const isSlanted = angle < 0.2; 
+      const baseRotate = deg - 90;
 
-      if (d.depth === 1) {
-        // For Depth 1 (Ring around center), we want text upright?
-        // If we follow the ring curve?
-        // Standard Fan: Text is radial or tangential.
-        // Existing code was tangential (rotated).
-        // Let's keep tangential but ensure correct flip.
-        rotate = deg > 90 && deg < 270 ? deg + 180 : deg;
+      if (isSlanted) {
+        // --- SLANTED (RADIAL) MODE for thin blocks ---
+        rotate = baseRotate;
+        if (deg > 90 && deg < 270) rotate += 180;
       } else {
-        rotate = deg < 180 ? deg - 90 : deg + 90;
+        // --- TANGENTIAL (HORIZONTAL) MODE for wider blocks ---
+        rotate = baseRotate + 90;
+        if (deg > 90 && deg < 270) rotate += 180;
       }
       return `translate(${cx}, ${cy}) rotate(${rotate})`;
     })
@@ -1160,13 +1280,16 @@ function initFan(startNodeId = null) {
         .style("font-weight", "bold")
         .call(wrap, isMobile ? 80 : 100);
 
-      // Relation (e.g., "Family Member" or "Myself")
+      // Relation — strip parenthetical detail e.g. "Brother-in-law (Sister's Husband)" → "Brother-in-law"
       if (d.data.relation) {
-        el.append("text")
-          .text(d.data.relation)
-          .attr("y", 12)
-          .style("font-size", "10px")
-          .style("fill", "#555");
+        const cleanRel = d.data.relation.replace(/\s*\(.*?\)\s*/g, "").trim();
+        if (cleanRel) {
+          el.append("text")
+            .text(cleanRel)
+            .attr("y", 12)
+            .style("font-size", "10px")
+            .style("fill", "#555");
+        }
       }
       return;
     }
@@ -1174,67 +1297,112 @@ function initFan(startNodeId = null) {
     // Expand Button Text (Dynamic or Depth Limit)
     if (d.isPlusButton) {
       // Re-center for the Plus symbol to ensure it's un-rotated IF we want upright.
-      // But the transform above applies rotation.
-      // Let's undo rotation for the Plus sign if we want it perfect,
-      // or just let it rotate. Rotated Plus is an 'X'.
-      // We want a Plus '+'.
-
-      // Undo rotation for clarity:
       el.attr("transform", function () {
         const centroid = arc.centroid(d);
         return `translate(${centroid[0]}, ${centroid[1]})`;
       });
 
-      el.attr("text-anchor", "middle").style("pointer-events", "none");
+      // --- PLUS BUTTON SCALING ---
+      // Scale down the symbol if the wedge is very narrow to avoid overlappers.
+      const plusFontSize = (d.x1 - d.x0 < 0.15) ? "10px" : "16px";
+
+      el.attr("text-anchor", "middle")
+        .attr("dominant-baseline", "central")
+        .style("pointer-events", "none");
 
       el.append("text")
         .text("+")
-        .attr("dy", "0.35em")
-        .style("font-size", "16px")
+        .attr("dy", "0em") // Baseline central handles this now
+        .style("font-size", plusFontSize)
         .style("font-weight", "bold")
         .style("fill", "white")
         .style("pointer-events", "none");
       return;
     }
 
-    // Standard Text
-    const relationText = d.data.relation;
-    const name = d.data.name;
+    // --- LABEL DYNAMIC FITTING ---
+    const angle = d.x1 - d.x0;
+    const isSlanted = angle < 0.2;
+    const midRadius = (d.y0 + d.y1) / 2;
+    const arcLengthPixels = angle * midRadius;
+    const radialThickness = d.y1 - d.y0;
 
-    // Dynamic Font Size
-    const angle = d.x1 - d.x0; // Radians
-    let fontSize = isMobile ? 6 : 8; // Reduced base for mobile
-    
-    // Scale down for smaller slices
-    if (angle < 0.25) fontSize = isMobile ? 5 : 7;
-    if (angle < 0.2) fontSize = isMobile ? 4.5 : 6;
-    if (angle < 0.15) fontSize = isMobile ? 4 : 5;
-    if (angle < 0.1) fontSize = isMobile ? 3.5 : 4;
-    if (angle < 0.06) fontSize = isMobile ? 3 : 3;
-    if (angle < 0.03) fontSize = isMobile ? 1.5 : 2; // Tiny
+    const availableWidth = isSlanted ? radialThickness : arcLengthPixels;
 
-    // Apply
+    // Standard Font Selection
+    let primaryFontSize = isMobile ? 6 : 8;
+    if (angle < 0.25) primaryFontSize = isMobile ? 5 : 7;
+    if (angle < 0.15) primaryFontSize = isMobile ? 4.5 : 6;
+
+    // Helper: Fitting Check
+    const name = d.data.name || "";
+    const nameWidth = name.length * primaryFontSize * 0.55;
+
+    // If name is too wide for one line, try splitting it
+    const parts = name.split(/\s+/);
+    const useTwoLines = nameWidth > arcLengthPixels && parts.length > 1;
+
+    // ABSOLUTE VISIBILITY CHECK: Only hide if it's physically impossible to fit
+    if (arcLengthPixels < 12 && d.depth > 1) return;
+
     el.attr("text-anchor", "middle")
+      .attr("dominant-baseline", "central") // Perfectly center the text label
       .style("font-family", "sans-serif")
       .style("fill", "#000");
 
-    // Name
-    el.append("text")
-      .text(name)
-      .attr("y", -fontSize / 2) // Center logic
-      .style("font-size", fontSize + "px")
-      .style("font-weight", "bold")
-      .style("pointer-events", "none");
+    if (useTwoLines) {
+      // Top Half
+      const topName = parts.slice(0, Math.ceil(parts.length/2)).join(" ");
+      const bottomName = parts.slice(Math.ceil(parts.length/2)).join(" ");
+      
+      el.append("text")
+        .text(topName)
+        .attr("dominant-baseline", "central")
+        .attr("text-anchor", "middle")
+        .attr("y", -primaryFontSize * 0.45)
+        .style("font-size", primaryFontSize + "px")
+        .style("font-weight", "bold");
 
-    // Relation (Smaller than Name)
-    const relSize = Math.max(3, fontSize - 2);
+      el.append("text")
+        .text(bottomName)
+        .attr("dominant-baseline", "central")
+        .attr("text-anchor", "middle")
+        .attr("y", primaryFontSize * 0.45)
+        .style("font-size", (primaryFontSize * 0.9) + "px");
+    } else {
+      // Single Line (Default)
+      const textEl = el.append("text")
+        .text(name)
+        .attr("dominant-baseline", "central")
+        .attr("text-anchor", "middle")
+        .attr("y", 0)
+        .style("font-size", primaryFontSize + "px")
+        .style("font-weight", "bold");
 
-    el.append("text")
-      .text(relationText)
-      .attr("y", fontSize / 2 + 2)
-      .style("font-size", relSize + "px")
-      .style("fill", "#444")
-      .style("pointer-events", "none");
+      // Auto-truncate if still overflowing single line
+      if (nameWidth > arcLengthPixels) {
+        const maxChars = Math.floor(arcLengthPixels / (primaryFontSize * 0.6));
+        if (maxChars > 3) {
+          textEl.text(name.slice(0, maxChars - 1) + "..");
+        } else {
+          textEl.text(""); // Hide if zero space
+        }
+      }
+    }
+
+    // Relation (only if there is height space)
+    if (radialThickness > 35 && !useTwoLines) {
+      const rel = d.data.relation ? d.data.relation.replace(/\s*\(.*?\)\s*/g, "").trim() : "";
+      if (rel) {
+        el.append("text")
+          .text(rel)
+          .attr("dominant-baseline", "central")
+          .attr("text-anchor", "middle")
+          .attr("y", primaryFontSize + 2)
+          .style("font-size", (primaryFontSize * 0.8) + "px")
+          .style("fill", "#666");
+      }
+    }
   });
 
   // Zoom Logic
@@ -1251,85 +1419,57 @@ function initFan(startNodeId = null) {
   // So Diameter is min(width, height) * 0.8.
   // A scale of 0.9 on top of that ensures 80% * 0.9 = 72% of screen is used,
   // which guarantees no clipping across any aspect ratio.
-  const initialScale = 0.9; 
+  const initialScale = 0.9;
   const initialTransform = d3.zoomIdentity
     .translate(width / 2, height / 2)
     .scale(initialScale);
 
-  svg
-    .call(zoom)
-    .call(zoom.transform, initialTransform);
+  svg.call(zoom).call(zoom.transform, initialTransform);
 
-  // Add "Back" button if we are deep (not at true root)
-  // --- Navigation Buttons (Back & Reset) ---
-  // Render Back Button if history exists
-  if (fanHistory.length > 0) {
-    const backBtn = svg
-      .append("g")
-      .attr("transform", `translate(50, 50)`)
-      .style("cursor", "pointer")
-      .on("click", () => {
-        const prevId = fanHistory.pop();
-        initFan(prevId);
-      });
-
-    backBtn
-      .append("rect")
-      .attr("width", 80)
-      .attr("height", 30)
-      .attr("rx", 15)
-      .attr("fill", "rgba(255, 255, 255, 0.2)")
-      .attr("stroke", "#fff");
-
-    backBtn
-      .append("text")
-      .attr("x", 40)
-      .attr("y", 20)
-      .attr("text-anchor", "middle")
-      .text("Back")
-      .style("fill", "white")
-      .style("font-size", "12px");
-  }
-
-  // Render Reset Button if not at true root (or deep)
-  // We check if we are NOT at the absolute start (which is usually found dynamically if not passed)
-  // Check if startNodeId is different from the initial 'Me'
-  // But initFan logic determines 'rootId' dynamically if startNodeId is null.
-  // Let's rely on: if (startNodeId && startNodeId !== "root" && startNodeId !== meNode.id)
-  // Note: meNode definition is inside initFan logic above. We need to access it.
-  // Re-finding 'Me' here is inefficient but safe.
-
-  // Better: Check if we have history. If history > 0, we can definitely Reset.
-  // Or if startNodeId is set?
-
-  if (fanHistory.length > 0) {
-    const resetBtn = svg
-      .append("g")
-      .attr("transform", `translate(140, 50)`) // Positioned to the right of Back button
-      .style("cursor", "pointer")
-      .on("click", () => {
-        fanHistory = []; // Clear history
-        initFan(); // Reset to default
-      });
-
-    resetBtn
-      .append("rect")
-      .attr("width", 80)
-      .attr("height", 30)
-      .attr("rx", 15)
-      .attr("fill", "rgba(255, 255, 255, 0.2)")
-      .attr("stroke", "#ff4444");
-
-    resetBtn
-      .append("text")
-      .attr("x", 40)
-      .attr("y", 20)
-      .attr("text-anchor", "middle")
-      .text("Reset")
-      .style("fill", "white")
-      .style("font-size", "12px");
-  }
+  // --- HTML Nav Button State Sync ---
+  updateFanNavButtons();
 }
+
+// Keep Back button enabled/disabled based on history depth
+function updateFanNavButtons() {
+  const hasHistory = fanHistory.length > 0;
+  
+  // Also enable Reset if we are simply not at the default root anymore (even without history)
+  const me = getMeFromRaw();
+  const isDefaultRoot = !currentFanRootId || (me && String(currentFanRootId) === String(me.id));
+  const canReset = hasHistory || !isDefaultRoot;
+
+  ["mobile", "desktop"].forEach((suffix) => {
+    const backBtn = document.getElementById(`fan-back-btn-${suffix}`);
+    const resetBtn = document.getElementById(`fan-reset-btn-${suffix}`);
+    if (backBtn) backBtn.disabled = !hasHistory;
+    if (resetBtn) resetBtn.disabled = !canReset;
+  });
+}
+
+// Wire up Back & Reset buttons (called once on page load)
+(function setupFanNavButtons() {
+  ["mobile", "desktop"].forEach((suffix) => {
+    const backBtn = document.getElementById(`fan-back-btn-${suffix}`);
+    const resetBtn = document.getElementById(`fan-reset-btn-${suffix}`);
+
+    if (backBtn) {
+      backBtn.addEventListener("click", () => {
+        if (fanHistory.length > 0) {
+          const prevId = fanHistory.pop();
+          initFan(prevId);
+        }
+      });
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        fanHistory = [];
+        initFan();
+      });
+    }
+  });
+})();
 
 // --- 5. Isometric 3D Logic ---
 
@@ -1621,28 +1761,29 @@ function switchView(view) {
   const fanControls = document.querySelectorAll(".fan-controls-group");
   const isoControls = document.querySelectorAll(".iso-controls-group");
   const fanSidebarMobile = document.getElementById("fan-member-sidebar");
-  const fanSidebarDesktop = document.getElementById("fan-member-sidebar-desktop");
-  
+  const fanSidebarDesktop = document.getElementById(
+    "fan-member-sidebar-desktop",
+  );
+
   if (view === "fan" || view === "isometric") {
     if (view === "fan") {
-      fanControls.forEach(el => el.style.display = "flex");
-      isoControls.forEach(el => el.style.display = "none");
+      fanControls.forEach((el) => (el.style.display = "flex"));
+      isoControls.forEach((el) => (el.style.display = "none"));
     } else if (view === "isometric") {
-      isoControls.forEach(el => el.style.display = "flex");
-      fanControls.forEach(el => el.style.display = "none");
+      isoControls.forEach((el) => (el.style.display = "flex"));
+      fanControls.forEach((el) => (el.style.display = "none"));
     }
-    
+
     if (fanSidebarMobile) fanSidebarMobile.style.display = "flex";
     if (fanSidebarDesktop) fanSidebarDesktop.style.display = "flex";
     populateMemberList();
   } else {
     // Hide Fan UI by default for other views
-    fanControls.forEach(el => el.style.display = "none");
-    isoControls.forEach(el => el.style.display = "none");
+    fanControls.forEach((el) => (el.style.display = "none"));
+    isoControls.forEach((el) => (el.style.display = "none"));
     if (fanSidebarMobile) fanSidebarMobile.style.display = "none";
     if (fanSidebarDesktop) fanSidebarDesktop.style.display = "none";
   }
-
 
   // 4. View Initialization
   if (view === "fan") {
@@ -1658,7 +1799,10 @@ function switchView(view) {
     initVerticalTreeV2();
   } else if (view === "isometric") {
     // Filter 3D view to only show Root, Parents, Siblings, and Children
-    const focusId = (typeof currentFanRootId !== "undefined" && currentFanRootId) ? currentFanRootId : null;
+    const focusId =
+      typeof currentFanRootId !== "undefined" && currentFanRootId
+        ? currentFanRootId
+        : null;
     console.log(`[SwitchView] Applying 3D focal filter for ID: ${focusId}`);
     const filtered = transformToIndividualFamilyTree(rawFamilyData, focusId);
     if (filtered) {
@@ -1668,7 +1812,7 @@ function switchView(view) {
   } else if (view === "pedigree") {
     // Pedigree should also respect focus
     if (typeof currentFanRootId !== "undefined" && currentFanRootId) {
-       familyData = transformFamilyData(rawFamilyData, currentFanRootId, true);
+      familyData = transformFamilyData(rawFamilyData, currentFanRootId, true);
     }
     initPedigreeView();
   } else if (view === "true-3d") {
@@ -1706,12 +1850,12 @@ document.querySelectorAll(".view-btn").forEach((btn) => {
 
 // Checkbox Listener
 // Checkbox Listener (Sync both mobile and desktop toggles)
-document.querySelectorAll(".ancestor-mode-toggle").forEach(toggle => {
+document.querySelectorAll(".ancestor-mode-toggle").forEach((toggle) => {
   toggle.addEventListener("change", (e) => {
     ancestorMode = e.target.checked;
-    
+
     // Sync other toggles
-    document.querySelectorAll(".ancestor-mode-toggle").forEach(t => {
+    document.querySelectorAll(".ancestor-mode-toggle").forEach((t) => {
       if (t !== e.target) t.checked = ancestorMode;
     });
 
@@ -1724,12 +1868,17 @@ let selectedMember = null;
 
 function showMemberOptionsModal(member) {
   selectedMember = member;
-  
+
   const modal = document.getElementById("member-options-modal");
-  document.getElementById("member-options-name").textContent = member.name || "Unknown";
-  document.getElementById("member-options-relation").textContent = member.relation || "";
-  document.getElementById("member-options-photo").src = member.photo || 'https://api.kintree.com/kintree-assets/images/default-avatars/' + (member.gender === 'f' ? 'female.png' : 'male.png');
-  
+  document.getElementById("member-options-name").textContent =
+    member.name || "Unknown";
+  document.getElementById("member-options-relation").textContent =
+    member.relation || "";
+  document.getElementById("member-options-photo").src =
+    member.photo ||
+    "https://api.kintree.com/kintree-assets/images/default-avatars/" +
+      (member.gender === "f" ? "female.png" : "male.png");
+
   modal.classList.add("active");
 }
 
@@ -1744,11 +1893,16 @@ function populateMemberList() {
   if (containers.length === 0 || !rawFamilyData) return;
 
   // Avoid multiple populations if called quickly (though d3 or list is small)
-  containers.forEach(container => container.innerHTML = "");
+  containers.forEach((container) => (container.innerHTML = ""));
 
-  const list = Array.isArray(rawFamilyData) ? rawFamilyData : (rawFamilyData.data || []);
-  console.log("Populating member list. Total members in raw data:", list.length);
-  
+  const list = Array.isArray(rawFamilyData)
+    ? rawFamilyData
+    : rawFamilyData.data || [];
+  console.log(
+    "Populating member list. Total members in raw data:",
+    list.length,
+  );
+
   // Sort by name (handling null/undefined)
   const sortedList = [...list].sort((a, b) => {
     const nameA = a.name || "";
@@ -1756,20 +1910,20 @@ function populateMemberList() {
     return nameA.localeCompare(nameB);
   });
   // Clean all containers
-  containers.forEach(container => container.innerHTML = "");
+  containers.forEach((container) => (container.innerHTML = ""));
 
-  sortedList.forEach(member => {
+  sortedList.forEach((member) => {
     const item = document.createElement("div");
     item.className = "member-item";
     item.dataset.id = member.id;
     item.innerHTML = `
-      <img src="${member.photo || 'https://api.kintree.com/kintree-assets/images/default-avatars/' + (member.gender === 'f' ? 'female.png' : 'male.png')}" alt="${member.name || 'Unknown'}">
+      <img src="${member.photo || "https://api.kintree.com/kintree-assets/images/default-avatars/" + (member.gender === "f" ? "female.png" : "male.png")}" alt="${member.name || "Unknown"}">
       <div class="member-item-info">
-        <span class="member-item-name">${member.name || 'Unknown'}</span>
-        <span class="member-item-relation">${member.relation || ''}</span>
+        <span class="member-item-name">${member.name || "Unknown"}</span>
+        <span class="member-item-relation">${(member.relation || "").replace(/\s*\(.*?\)\s*/g, "").trim()}</span>
       </div>
     `;
-    containers.forEach(container => {
+    containers.forEach((container) => {
       const clone = item.cloneNode(true);
       clone.addEventListener("click", () => {
         showMemberOptionsModal(member);
@@ -1782,9 +1936,13 @@ function populateMemberList() {
 function filterMemberList(query) {
   const items = document.querySelectorAll(".member-item");
   const q = query.toLowerCase();
-  items.forEach(item => {
-    const name = item.querySelector(".member-item-name").textContent.toLowerCase();
-    const relation = item.querySelector(".member-item-relation").textContent.toLowerCase();
+  items.forEach((item) => {
+    const name = item
+      .querySelector(".member-item-name")
+      .textContent.toLowerCase();
+    const relation = item
+      .querySelector(".member-item-relation")
+      .textContent.toLowerCase();
     if (name.includes(q) || relation.includes(q)) {
       item.style.display = "flex";
     } else {
@@ -1793,31 +1951,35 @@ function filterMemberList(query) {
   });
 }
 
-document.querySelectorAll(".member-search-input").forEach(input => {
+document.querySelectorAll(".member-search-input").forEach((input) => {
   input.addEventListener("input", (e) => {
     filterMemberList(e.target.value);
   });
 });
 
 // Member Options Modal Listeners
-document.querySelector(".modal-close-btn")?.addEventListener("click", closeMemberOptionsModal);
-document.getElementById("member-options-modal")?.addEventListener("click", (e) => {
-  if (e.target.id === "member-options-modal") {
-    closeMemberOptionsModal();
-  }
-});
+document
+  .querySelector(".modal-close-btn")
+  ?.addEventListener("click", closeMemberOptionsModal);
+document
+  .getElementById("member-options-modal")
+  ?.addEventListener("click", (e) => {
+    if (e.target.id === "member-options-modal") {
+      closeMemberOptionsModal();
+    }
+  });
 
 document.getElementById("view-details-btn")?.addEventListener("click", () => {
   if (selectedMember) {
     // Populate the modal with member details
     modalBody.html(`
       <div class="modal-profile">
-          <img src="${selectedMember.photo || 'https://api.kintree.com/kintree-assets/images/default-avatars/' + (selectedMember.gender === 'f' ? 'female.png' : 'male.png')}" alt="${selectedMember.name}" class="modal-image">
+          <img src="${selectedMember.photo || "https://api.kintree.com/kintree-assets/images/default-avatars/" + (selectedMember.gender === "f" ? "female.png" : "male.png")}" alt="${selectedMember.name}" class="modal-image">
           
           <div class="modal-content-wrapper">
-              <h2 class="modal-name">${selectedMember.name || 'Unknown'}</h2>
+              <h2 class="modal-name">${selectedMember.name || "Unknown"}</h2>
               <p class="modal-info">
-                  ${selectedMember.relation || 'N/A'} <span style="color:var(--neon-cyan)">•</span> 
+                  ${selectedMember.relation || "N/A"} <span style="color:var(--neon-cyan)">•</span> 
                   ${selectedMember.size ? "Family Size: " + selectedMember.size : selectedMember.age ? selectedMember.age + " years" : "Age N/A"} 
                   <span style="color:var(--neon-cyan)">•</span> ${selectedMember.gender === "m" ? "Male" : selectedMember.gender === "f" ? "Female" : "N/A"}
                   <span style="color:var(--neon-cyan)">•</span> ${selectedMember.location || "Location N/A"}
@@ -1840,7 +2002,7 @@ document.getElementById("view-details-btn")?.addEventListener("click", () => {
           </div>
       </div>
     `);
-    
+
     // CAPTURE DATA FIRST before closing modal resets selectedMember
     const memberData = { ...selectedMember };
     closeMemberOptionsModal();
@@ -1852,12 +2014,12 @@ document.getElementById("view-tree-btn")?.addEventListener("click", () => {
   if (selectedMember) {
     // CAPTURE DATA FIRST
     const memberId = selectedMember.id;
-    
+
     closeMemberOptionsModal();
-    
+
     // Close mobile drawer first
     document.body.classList.remove("mobile-drawer-open");
-    
+
     // Switch to their tree view - Force them to be the root
     console.log("Re-rooting tree on:", memberId);
     switchToIndividualFamilyView(currentView, memberId, true);
@@ -1885,7 +2047,9 @@ document.querySelectorAll(".view-btn").forEach((btn) => {
 
 // Focus/Filter functions for family views
 const switchToMyFamilyView = () => {
-  document.querySelectorAll(".focus-btn").forEach(b => b.classList.remove("active"));
+  document
+    .querySelectorAll(".focus-btn")
+    .forEach((b) => b.classList.remove("active"));
   document.getElementById("my-family")?.classList.add("active");
   if (currentView === "fan") {
     initFan();
@@ -1897,7 +2061,9 @@ const switchToMyFamilyView = () => {
 };
 
 const switchToMaternalView = () => {
-  document.querySelectorAll(".focus-btn").forEach(b => b.classList.remove("active"));
+  document
+    .querySelectorAll(".focus-btn")
+    .forEach((b) => b.classList.remove("active"));
   document.getElementById("maternal-family")?.classList.add("active");
   if (currentView === "fan") {
     initFan();
@@ -1909,7 +2075,9 @@ const switchToMaternalView = () => {
 };
 
 const switchToWifeView = () => {
-  document.querySelectorAll(".focus-btn").forEach(b => b.classList.remove("active"));
+  document
+    .querySelectorAll(".focus-btn")
+    .forEach((b) => b.classList.remove("active"));
   document.getElementById("wife-family")?.classList.add("active");
   if (currentView === "fan") {
     initFan();
@@ -1921,7 +2089,9 @@ const switchToWifeView = () => {
 };
 
 const switchToIndividualView = () => {
-  document.querySelectorAll(".focus-btn").forEach(b => b.classList.remove("active"));
+  document
+    .querySelectorAll(".focus-btn")
+    .forEach((b) => b.classList.remove("active"));
   document.getElementById("individual-family")?.classList.add("active");
   switchToIndividualFamilyView(currentView);
 };
@@ -2489,7 +2659,20 @@ d3.json("data.json")
     }
 
     // Show Error on Screen if no fallback available
-    d3.select("body").append("div").style("position", "fixed").style("top", "50%").style("left", "50%").style("transform", "translate(-50%, -50%)").style("background", "rgba(50, 0, 0, 0.9)").style("color", "white").style("padding", "30px").style("border", "2px solid red").style("border-radius", "10px").style("text-align", "center").style("z-index", "9999").html(`
+    d3
+      .select("body")
+      .append("div")
+      .style("position", "fixed")
+      .style("top", "50%")
+      .style("left", "50%")
+      .style("transform", "translate(-50%, -50%)")
+      .style("background", "rgba(50, 0, 0, 0.9)")
+      .style("color", "white")
+      .style("padding", "30px")
+      .style("border", "2px solid red")
+      .style("border-radius", "10px")
+      .style("text-align", "center")
+      .style("z-index", "9999").html(`
             <h2>Data Loading Failed</h2>
             <p>Could not load <code>data.json</code>. This is likely due to browser security restrictions (CORS) when opening files directly.</p>
             <hr style="border-color: #555;">
@@ -2537,22 +2720,34 @@ document.getElementById("wife-family")?.addEventListener("click", () => {
   switchView(currentView);
 });
 
-const switchToIndividualFamilyView = (targetView, targetId = null, rootAtFocus = false) => {
+const switchToIndividualFamilyView = (
+  targetView,
+  targetId = null,
+  rootAtFocus = false,
+) => {
   // New Feature: Restricted Individual Family View
   // Centers on Target + Parents + Siblings + Wife + Kids
 
   // 1. Get Target (Focus)
   let targetNode;
   if (targetId) {
-    const list = Array.isArray(rawFamilyData) ? rawFamilyData : (rawFamilyData.data || []);
+    const list = Array.isArray(rawFamilyData)
+      ? rawFamilyData
+      : rawFamilyData.data || [];
     targetNode = list.find((m) => String(m.id) === String(targetId));
   } else {
     targetNode = getMeFromRaw();
   }
 
   if (!targetNode) {
-    console.error("Could not find target user. ID:", targetId, "Available IDs:", 
-      Array.isArray(rawFamilyData) ? rawFamilyData.map(m => m.id) : (rawFamilyData.data || []).map(m => m.id));
+    console.error(
+      "Could not find target user. ID:",
+      targetId,
+      "Available IDs:",
+      Array.isArray(rawFamilyData)
+        ? rawFamilyData.map((m) => m.id)
+        : (rawFamilyData.data || []).map((m) => m.id),
+    );
     alert("Could not find the target user in the data.");
     return;
   }
@@ -2561,7 +2756,7 @@ const switchToIndividualFamilyView = (targetView, targetId = null, rootAtFocus =
   // If targetId is provided and we want to root at focus, use the full raw background data
   // but specify the focus and rootAtFocus flag.
   // Otherwise, use the filtered "Individual Family" view.
-  
+
   if (targetId && rootAtFocus) {
     // Re-root without strict filtering
     familyData = transformFamilyData(rawFamilyData, targetId, true);
@@ -2569,15 +2764,18 @@ const switchToIndividualFamilyView = (targetView, targetId = null, rootAtFocus =
     // Individual Family Filter (Parents + Siblings + Spouse + Kids)
     const newData = transformToIndividualFamily(rawFamilyData, targetNode.id);
     if (!newData) {
-      console.error("Failed to generate Individual Family view for ID:", targetNode.id);
+      console.error(
+        "Failed to generate Individual Family view for ID:",
+        targetNode.id,
+      );
       alert("Failed to generate Individual Family view.");
       return;
     }
-    // Note: We intentionally DO NOT overwrite the global rawFamilyData here 
+    // Note: We intentionally DO NOT overwrite the global rawFamilyData here
     // to preserve the full graph for views that need it (like Fan View).
     familyData = transformFamilyData(newData);
   }
-  
+
   if (!familyData) {
     console.error("Failed to generate family data structure.");
     return;
@@ -3058,245 +3256,276 @@ function initD3Globe_Deprecated() {
 // ─────────────────────────────────────
 
 async function exportView(format) {
-    const uiSelectors = [
-        '.mobile-menu-btn', 
-        '.mobile-drawer-header', 
-        '.mobile-drawer-container',
-        '.control-panel', 
-        '.member-sidebar', 
-        '.toast-notification', 
-        '.member-options-modal',
-        '#mobile-drawer-overlay'
-    ];
-    
-    const hiddenElements = [];
-    uiSelectors.forEach(selector => {
-        document.querySelectorAll(selector).forEach(el => {
-            if (el.style.display !== 'none') {
-                hiddenElements.push({ el, originalDisplay: el.style.display });
-                el.style.display = 'none';
-            }
-        });
+  const uiSelectors = [
+    ".mobile-menu-btn",
+    ".mobile-drawer-header",
+    ".mobile-drawer-container",
+    ".control-panel",
+    ".member-sidebar",
+    ".toast-notification",
+    ".member-options-modal",
+    "#mobile-drawer-overlay",
+  ];
+
+  const hiddenElements = [];
+  uiSelectors.forEach((selector) => {
+    document.querySelectorAll(selector).forEach((el) => {
+      if (el.style.display !== "none") {
+        hiddenElements.push({ el, originalDisplay: el.style.display });
+        el.style.display = "none";
+      }
     });
+  });
 
-    const container = document.getElementById('tree-container');
-    const originalBodyOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'visible';
-    const originalContainerOverflow = container ? container.style.overflow : '';
-    if (container) container.style.overflow = 'visible';
+  const container = document.getElementById("tree-container");
+  const originalBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = "visible";
+  const originalContainerOverflow = container ? container.style.overflow : "";
+  if (container) container.style.overflow = "visible";
 
-    // Show a premium Processing Overlay
-    let overlay = document.querySelector('.export-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.className = 'export-overlay';
-        overlay.innerHTML = `
+  // Show a premium Processing Overlay
+  let overlay = document.querySelector(".export-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.className = "export-overlay";
+    overlay.innerHTML = `
             <div class="export-spinner"></div>
             <div class="export-message">Generating ${format.toUpperCase()}...</div>
         `;
-        document.body.appendChild(overlay);
-    } else {
-        overlay.querySelector('.export-message').innerText = `Generating ${format.toUpperCase()}...`;
+    document.body.appendChild(overlay);
+  } else {
+    overlay.querySelector(".export-message").innerText =
+      `Generating ${format.toUpperCase()}...`;
+  }
+
+  // Smooth fade in
+  requestAnimationFrame(() => overlay.classList.add("active"));
+
+  let originalState = {};
+
+  try {
+    const svgElement = container ? container.querySelector("svg") : null;
+    const globeContainer = document.getElementById("globe-container");
+
+    // 1. Specialized Preparation for Full View
+    if (currentView === "globe" && typeof myGlobe !== "undefined") {
+      // Store current POV
+      originalState.pov = myGlobe.pointOfView();
+      // Trigger auto-focus on family if possible
+      // Note: autoZoomToFamily is local to initThreeGlobe,
+      // so we'll approximate a full view or hope it was already focused.
+      // For now, we'll try to show the whole globe area.
+      myGlobe.pointOfView({ lat: 0, lng: 0, alt: 2.5 }, 500);
+      await new Promise((r) => setTimeout(r, 600));
+    } else if (svgElement) {
+      const g = d3.select(svgElement).select("g");
+      if (!g.empty()) {
+        const bbox = g.node().getBBox();
+        const padding = 80;
+
+        originalState.width = svgElement.getAttribute("width");
+        originalState.height = svgElement.getAttribute("height");
+        originalState.viewBox = svgElement.getAttribute("viewBox");
+        originalState.transform = g.attr("transform");
+        originalState.scrollLeft = document.documentElement.scrollLeft;
+        originalState.scrollTop = document.documentElement.scrollTop;
+
+        // Expand SVG and shift content to (0,0)
+        const fullW = bbox.width + padding * 2;
+        const fullH = bbox.height + padding * 2;
+        svgElement.setAttribute("width", fullW);
+        svgElement.setAttribute("height", fullH);
+        svgElement.removeAttribute("viewBox");
+        g.attr(
+          "transform",
+          `translate(${-bbox.x + padding}, ${-bbox.y + padding})`,
+        );
+
+        // Allow some time for layout updates
+        await new Promise((r) => setTimeout(r, 100));
+      }
     }
-    
-    // Smooth fade in
-    requestAnimationFrame(() => overlay.classList.add('active'));
 
-    let originalState = {};
+    const captureWidth = svgElement
+      ? parseFloat(svgElement.getAttribute("width"))
+      : window.innerWidth;
+    const captureHeight = svgElement
+      ? parseFloat(svgElement.getAttribute("height"))
+      : window.innerHeight;
 
+    const canvas = await html2canvas(document.body, {
+      useCORS: true,
+      allowTaint: false,
+      logging: true,
+      backgroundColor: null,
+      scale: 1.5, // Adjust for quality vs performance
+      width: captureWidth,
+      height: captureHeight,
+      windowWidth: captureWidth,
+      windowHeight: captureHeight,
+      ignoreElements: (el) => {
+        // Ensure UI, processing message, and modals are not captured
+        return (
+          el.classList.contains("control-panel") ||
+          el.classList.contains("member-sidebar") ||
+          el.classList.contains("mobile-menu-btn") ||
+          el.classList.contains("export-overlay") ||
+          el.classList.contains("member-options-modal") ||
+          el.id === "download-controls" ||
+          el === overlay
+        );
+      },
+    });
+
+    const imgData = canvas.toDataURL(
+      format === "png" ? "image/png" : "image/jpeg",
+      0.9,
+    );
+    const fileName = `family-tree-${currentView}-${new Date().toISOString().slice(0, 10)}`;
+
+    if (format === "jpg") {
+      const link = document.createElement("a");
+      link.download = `${fileName}.jpg`;
+      link.href = imgData;
+      link.click();
+    } else if (format === "png") {
+      const link = document.createElement("a");
+      link.download = `${fileName}.png`;
+      link.href = imgData;
+      link.click();
+    } else if (format === "pdf") {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation: canvas.width > canvas.height ? "l" : "p",
+        unit: "px",
+        format: [canvas.width, canvas.height],
+      });
+      pdf.addImage(imgData, "JPEG", 0, 0, canvas.width, canvas.height);
+      pdf.save(`${fileName}.pdf`);
+    }
+  } catch (err) {
+    console.error("Export failed:", err);
+    alert("An error occurred during export. Check console for details.");
+  } finally {
+    // 3. Restore UI first to ensure it reappears even if restoration fails
+    // 3. Restore UI first to ensure it reappears even if restoration fails
+    const exportOverlay = document.querySelector(".export-overlay");
+    if (exportOverlay) exportOverlay.classList.remove("active");
+
+    hiddenElements.forEach(({ el, originalDisplay }) => {
+      el.style.display = originalDisplay;
+    });
+
+    document.body.style.overflow = originalBodyOverflow;
+    const container = document.getElementById("tree-container");
+    if (container) container.style.overflow = originalContainerOverflow;
+
+    // 4. Restore State
     try {
-        const svgElement = container ? container.querySelector('svg') : null;
-        const globeContainer = document.getElementById('globe-container');
-
-        // 1. Specialized Preparation for Full View
-        if (currentView === 'globe' && typeof myGlobe !== 'undefined') {
-            // Store current POV
-            originalState.pov = myGlobe.pointOfView();
-            // Trigger auto-focus on family if possible
-            // Note: autoZoomToFamily is local to initThreeGlobe, 
-            // so we'll approximate a full view or hope it was already focused.
-            // For now, we'll try to show the whole globe area.
-            myGlobe.pointOfView({ lat: 0, lng: 0, alt: 2.5 }, 500);
-            await new Promise(r => setTimeout(r, 600));
-        } else if (svgElement) {
-            const g = d3.select(svgElement).select('g');
-            if (!g.empty()) {
-                const bbox = g.node().getBBox();
-                const padding = 80;
-                
-                originalState.width = svgElement.getAttribute('width');
-                originalState.height = svgElement.getAttribute('height');
-                originalState.viewBox = svgElement.getAttribute('viewBox');
-                originalState.transform = g.attr('transform');
-                originalState.scrollLeft = document.documentElement.scrollLeft;
-                originalState.scrollTop = document.documentElement.scrollTop;
-
-                // Expand SVG and shift content to (0,0)
-                const fullW = bbox.width + padding * 2;
-                const fullH = bbox.height + padding * 2;
-                svgElement.setAttribute('width', fullW);
-                svgElement.setAttribute('height', fullH);
-                svgElement.removeAttribute('viewBox'); 
-                g.attr('transform', `translate(${-bbox.x + padding}, ${-bbox.y + padding})`);
-                
-                // Allow some time for layout updates
-                await new Promise(r => setTimeout(r, 100));
-            }
+      if (
+        currentView === "globe" &&
+        typeof myGlobe !== "undefined" &&
+        originalState.pov
+      ) {
+        myGlobe.pointOfView(originalState.pov, 500);
+      } else {
+        const svgElement = document.querySelector("#tree-container svg");
+        if (svgElement && originalState.width) {
+          svgElement.setAttribute("width", originalState.width);
+          svgElement.setAttribute("height", originalState.height);
+          if (originalState.viewBox)
+            svgElement.setAttribute("viewBox", originalState.viewBox);
+          d3.select(svgElement)
+            .select("g")
+            .attr("transform", originalState.transform);
+          window.scrollTo(
+            originalState.scrollLeft || 0,
+            originalState.scrollTop || 0,
+          );
         }
-
-        const captureWidth = svgElement ? parseFloat(svgElement.getAttribute('width')) : window.innerWidth;
-        const captureHeight = svgElement ? parseFloat(svgElement.getAttribute('height')) : window.innerHeight;
-
-        const canvas = await html2canvas(document.body, {
-            useCORS: true,
-            allowTaint: false,
-            logging: true,
-            backgroundColor: null,
-            scale: 1.5, // Adjust for quality vs performance
-            width: captureWidth,
-            height: captureHeight,
-            windowWidth: captureWidth,
-            windowHeight: captureHeight,
-            ignoreElements: (el) => {
-                // Ensure UI, processing message, and modals are not captured
-                return (
-                    el.classList.contains('control-panel') || 
-                    el.classList.contains('member-sidebar') || 
-                    el.classList.contains('mobile-menu-btn') ||
-                    el.classList.contains('export-overlay') ||
-                    el.classList.contains('member-options-modal') ||
-                    el.id === 'download-controls' || 
-                    el === overlay
-                );
-            }
-        });
-
-        const imgData = canvas.toDataURL(format === 'png' ? 'image/png' : 'image/jpeg', 0.90);
-        const fileName = `family-tree-${currentView}-${new Date().toISOString().slice(0, 10)}`;
-
-        if (format === 'jpg') {
-            const link = document.createElement('a');
-            link.download = `${fileName}.jpg`;
-            link.href = imgData;
-            link.click();
-        } else if (format === 'png') {
-            const link = document.createElement('a');
-            link.download = `${fileName}.png`;
-            link.href = imgData;
-            link.click();
-        } else if (format === 'pdf') {
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF({
-                orientation: canvas.width > canvas.height ? 'l' : 'p',
-                unit: 'px',
-                format: [canvas.width, canvas.height]
-            });
-            pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height);
-            pdf.save(`${fileName}.pdf`);
-        }
-    } catch (err) {
-        console.error("Export failed:", err);
-        alert("An error occurred during export. Check console for details.");
-    } finally {
-        // 3. Restore UI first to ensure it reappears even if restoration fails
-        // 3. Restore UI first to ensure it reappears even if restoration fails
-        const exportOverlay = document.querySelector('.export-overlay');
-        if (exportOverlay) exportOverlay.classList.remove('active');
-        
-        hiddenElements.forEach(({ el, originalDisplay }) => {
-            el.style.display = originalDisplay;
-        });
-        
-        document.body.style.overflow = originalBodyOverflow;
-        const container = document.getElementById('tree-container');
-        if (container) container.style.overflow = originalContainerOverflow;
-
-        // 4. Restore State
-        try {
-            if (currentView === 'globe' && typeof myGlobe !== 'undefined' && originalState.pov) {
-                myGlobe.pointOfView(originalState.pov, 500);
-            } else {
-                const svgElement = document.querySelector('#tree-container svg');
-                if (svgElement && originalState.width) {
-                    svgElement.setAttribute('width', originalState.width);
-                    svgElement.setAttribute('height', originalState.height);
-                    if (originalState.viewBox) svgElement.setAttribute('viewBox', originalState.viewBox);
-                    d3.select(svgElement).select('g').attr('transform', originalState.transform);
-                    window.scrollTo(originalState.scrollLeft || 0, originalState.scrollTop || 0);
-                }
-            }
-        } catch (restoreErr) {
-            console.error("Restoration error:", restoreErr);
-        }
+      }
+    } catch (restoreErr) {
+      console.error("Restoration error:", restoreErr);
     }
+  }
 }
 
 // Add event listeners for download buttons
-document.addEventListener('DOMContentLoaded', () => {
-    // --- Unified Download Button Logic ---
-    const downloadOpenBtns = document.querySelectorAll('.download-open-btn');
-    const exportModal = document.getElementById('export-selection-modal');
-    const closeExportBtn = document.getElementById('close-export-modal');
-    const formatBtns = document.querySelectorAll('.export-format-btn');
-    
-    // Open Modal
-    downloadOpenBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            if (exportModal) exportModal.classList.add('active');
-        });
-    });
+document.addEventListener("DOMContentLoaded", () => {
+  // --- Unified Download Button Logic ---
+  const downloadOpenBtns = document.querySelectorAll(".download-open-btn");
+  const exportModal = document.getElementById("export-selection-modal");
+  const closeExportBtn = document.getElementById("close-export-modal");
+  const formatBtns = document.querySelectorAll(".export-format-btn");
 
-    // Close Modal
-    if (closeExportBtn) {
-        closeExportBtn.addEventListener('click', () => {
-            exportModal.classList.remove('active');
-        });
+  // Open Modal
+  downloadOpenBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (exportModal) exportModal.classList.add("active");
+    });
+  });
+
+  // Close Modal
+  if (closeExportBtn) {
+    closeExportBtn.addEventListener("click", () => {
+      exportModal.classList.remove("active");
+    });
+  }
+
+  // Handle format selection
+  formatBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const format = btn.dataset.format;
+      exportModal.classList.remove("active"); // Hide modal immediately
+      exportView(format); // Start export
+    });
+  });
+
+  // --- Theme Toggle Logic ---
+  window.isDarkMode = localStorage.getItem("familyTreeTheme") !== "light";
+
+  const applyTheme = () => {
+    if (window.isDarkMode) {
+      document.body.classList.remove("light-mode");
+    } else {
+      document.body.classList.add("light-mode");
     }
 
-    // Handle format selection
-    formatBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const format = btn.dataset.format;
-            exportModal.classList.remove('active'); // Hide modal immediately
-            exportView(format);                     // Start export
-        });
+    // Update all theme icons
+    document.querySelectorAll(".theme-toggle").forEach((btn) => {
+      const icon = btn.querySelector("i");
+      if (icon) {
+        icon.className = window.isDarkMode
+          ? "fa-solid fa-sun"
+          : "fa-solid fa-moon";
+      }
+      btn.title = window.isDarkMode
+        ? "Switch to Light Mode"
+        : "Switch to Dark Mode";
     });
+  };
 
-    // --- Theme Toggle Logic ---
-    window.isDarkMode = localStorage.getItem("familyTreeTheme") !== "light";
+  applyTheme();
 
-    const applyTheme = () => {
-        if (window.isDarkMode) {
-            document.body.classList.remove("light-mode");
-        } else {
-            document.body.classList.add("light-mode");
+  // Attach listener to all theme toggle buttons
+  document.querySelectorAll(".theme-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      window.isDarkMode = !window.isDarkMode;
+      localStorage.setItem(
+        "familyTreeTheme",
+        window.isDarkMode ? "dark" : "light",
+      );
+      applyTheme();
+
+      // Re-render D3 views if active so they can optionally update layout-based backgrounds
+      if (
+        typeof currentView !== "undefined" &&
+        (currentView === "fan" || currentView === "isometric")
+      ) {
+        if (typeof switchView === "function") {
+          switchView(currentView);
         }
-        
-        // Update all theme icons
-        document.querySelectorAll(".theme-toggle").forEach(btn => {
-            const icon = btn.querySelector("i");
-            if (icon) {
-                icon.className = window.isDarkMode ? "fa-solid fa-sun" : "fa-solid fa-moon";
-            }
-            btn.title = window.isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode";
-        });
-    };
-
-    applyTheme();
-
-    // Attach listener to all theme toggle buttons
-    document.querySelectorAll('.theme-toggle').forEach(btn => {
-        btn.addEventListener('click', () => {
-            window.isDarkMode = !window.isDarkMode;
-            localStorage.setItem("familyTreeTheme", window.isDarkMode ? "dark" : "light");
-            applyTheme();
-
-            // Re-render D3 views if active so they can optionally update layout-based backgrounds
-            if (typeof currentView !== 'undefined' && (currentView === 'fan' || currentView === 'isometric' || currentView === 'pedigree')) {
-                if (typeof switchView === "function") {
-                    switchView(currentView);
-                }
-            }
-        });
+      }
     });
+  });
 });
