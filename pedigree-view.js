@@ -11,11 +11,22 @@
  */
 
 function initPedigreeView() {
+    const isLight = document.body.classList.contains("light-mode");
+    
     const svg = d3.select("#tree-container svg");
     svg.selectAll("*").remove();
     svg.on(".drag", null);
     svg.on(".zoom", null);
-    svg.style("background", "#f5f7fa");
+    
+    // Dynamic Colors
+    const BG_COLOR = isLight ? "#f5f7fa" : "#171717";
+    const LINE_COLOR = isLight ? "#e2e8f0" : "rgba(255,255,255,0.1)";
+    const CARD_BG = isLight ? "white" : "#1a1a2e";
+    const NAME_COLOR = isLight ? "#37474f" : "#ffffff";
+    const REL_COLOR = isLight ? "#a0aab0" : "rgba(255,255,255,0.6)";
+    const TITLE_COLOR = isLight ? "#546e7a" : "var(--neon-cyan)";
+    
+    svg.style("background", BG_COLOR);
 
     const width = +svg.attr("width");
     const height = +svg.attr("height");
@@ -29,7 +40,7 @@ function initPedigreeView() {
     const V_GAP = 14;    // vertical gap between adjacent cards (equal everywhere)
     const BEND_R = 10;    // rounded corner radius for connectors
 
-    const LINE_COLOR = "#e2e8f0";
+    // const LINE_COLOR = "#e2e8f0"; // Moved to dynamic section
     const LINE_W = 2.0;
     const MALE_BORDER = "#51d1e3";
     const FEMALE_BORDER = "#f5a3c7";
@@ -219,7 +230,7 @@ function initPedigreeView() {
         const cy = c.y;
         const isFemale = person.gender === 'f';
         const borderColor = isFemale ? FEMALE_BORDER : MALE_BORDER;
-        const ringBg = isFemale ? '#fce4ec' : '#e3f2fd';
+        const ringBg = isFemale ? (isLight ? '#fce4ec' : '#3d2530') : (isLight ? '#e3f2fd' : '#1e2c3a');
         const trunc = (s, n) => s && s.length > n ? s.slice(0, n - 2) + '…' : s;
 
         const card = cardG.append("g")
@@ -232,7 +243,7 @@ function initPedigreeView() {
             .attr("x", -CARD_W / 2).attr("y", -CARD_H / 2)
             .attr("width", CARD_W).attr("height", CARD_H)
             .attr("rx", CARD_R)
-            .attr("fill", "white")
+            .attr("fill", CARD_BG)
             .attr("stroke", borderColor)
             .attr("stroke-width", 1.5)
             .attr("filter", "url(#ped-shadow)");
@@ -264,7 +275,7 @@ function initPedigreeView() {
             .attr("x", avX + AVATAR_R + 9).attr("y", -3)
             .attr("font-family", "'Poppins', 'Segoe UI', sans-serif")
             .attr("font-size", "12px").attr("font-weight", 600)
-            .attr("fill", "#37474f")
+            .attr("fill", NAME_COLOR)
             .text(trunc(person.name, 16))
             .append("title").text(person.name);
 
@@ -273,7 +284,7 @@ function initPedigreeView() {
             .attr("x", avX + AVATAR_R + 9).attr("y", 11)
             .attr("font-family", "'Poppins', 'Segoe UI', sans-serif")
             .attr("font-size", "9px").attr("font-weight", 400)
-            .attr("fill", "#a0aab0")
+            .attr("fill", REL_COLOR)
             .text(trunc(person.relation || "", 24));
     });
 
@@ -282,7 +293,7 @@ function initPedigreeView() {
         .attr("x", 22).attr("y", 28)
         .attr("font-family", "'Poppins', sans-serif")
         .attr("font-size", "15px").attr("font-weight", 600)
-        .attr("fill", "#546e7a")
+        .attr("fill", TITLE_COLOR)
         .text("Pedigree View");
 
     // --- Zoom & Pan ---

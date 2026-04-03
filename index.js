@@ -3292,7 +3292,7 @@ document.addEventListener('DOMContentLoaded', () => {
             applyTheme();
 
             // Re-render D3 views if active so they can optionally update layout-based backgrounds
-            if (typeof currentView !== 'undefined' && (currentView === 'fan' || currentView === 'isometric')) {
+            if (typeof currentView !== 'undefined' && (currentView === 'fan' || currentView === 'isometric' || currentView === 'pedigree')) {
                 if (typeof switchView === "function") {
                     switchView(currentView);
                 }
