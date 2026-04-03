@@ -1571,6 +1571,9 @@ function initVerticalTree() {
 function switchView(view) {
   currentView = view;
 
+  // Close mobile drawer when user changes view, to keep screen clean.
+  document.body.classList.remove("mobile-drawer-open");
+
   // 1. Globe Cleanup (Always try to close/hide Three.js first)
   try {
     if (typeof closeThreeGlobe === "function") closeThreeGlobe();
@@ -1654,6 +1657,25 @@ document.getElementById("ancestor-mode").addEventListener("change", (e) => {
 });
 
 // Member Sidebar Logic
+let selectedMember = null;
+
+function showMemberOptionsModal(member) {
+  selectedMember = member;
+  
+  const modal = document.getElementById("member-options-modal");
+  document.getElementById("member-options-name").textContent = member.name || "Unknown";
+  document.getElementById("member-options-relation").textContent = member.relation || "";
+  document.getElementById("member-options-photo").src = member.photo || 'https://api.kintree.com/kintree-assets/images/default-avatars/' + (member.gender === 'f' ? 'female.png' : 'male.png');
+  
+  modal.classList.add("active");
+}
+
+function closeMemberOptionsModal() {
+  const modal = document.getElementById("member-options-modal");
+  modal.classList.remove("active");
+  selectedMember = null;
+}
+
 function populateMemberList() {
   const listContainer = document.getElementById("member-list");
   if (!listContainer || !rawFamilyData) return;
@@ -1681,11 +1703,7 @@ function populateMemberList() {
       </div>
     `;
     item.addEventListener("click", () => {
-      if (currentView === "fan") {
-        initFan(member.id.toString());
-      } else if (currentView === "isometric" || currentView === "true-3d") {
-        switchToIndividualFamilyView(currentView, member.id);
-      }
+      showMemberOptionsModal(member);
     });
     listContainer.appendChild(item);
   });
@@ -1705,42 +1723,199 @@ function filterMemberList(query) {
   });
 }
 
-document.getElementById("member-search")?.addEventListener("input", (e) => {
-  filterMemberList(e.target.value);
+document.querySelectorAll(".member-search-input").forEach(input => {
+  input.addEventListener("input", (e) => {
+    filterMemberList(e.target.value);
+  });
 });
 
-// Button Listeners
+// Member Options Modal Listeners
+document.querySelector(".modal-close-btn")?.addEventListener("click", closeMemberOptionsModal);
+document.getElementById("member-options-modal")?.addEventListener("click", (e) => {
+  if (e.target.id === "member-options-modal") {
+    closeMemberOptionsModal();
+  }
+});
+
+document.getElementById("view-details-btn")?.addEventListener("click", () => {
+  if (selectedMember) {
+    // Populate the modal with member details
+    modalBody.html(`
+      <div class="modal-profile">
+          <img src="${selectedMember.photo || 'https://api.kintree.com/kintree-assets/images/default-avatars/' + (selectedMember.gender === 'f' ? 'female.png' : 'male.png')}" alt="${selectedMember.name}" class="modal-image">
+          
+          <div class="modal-content-wrapper">
+              <h2 class="modal-name">${selectedMember.name || 'Unknown'}</h2>
+              <p class="modal-info">
+                  ${selectedMember.relation || 'N/A'} <span style="color:var(--neon-cyan)">•</span> 
+                  ${selectedMember.size ? "Family Size: " + selectedMember.size : selectedMember.age ? selectedMember.age + " years" : "Age N/A"} 
+                  <span style="color:var(--neon-cyan)">•</span> ${selectedMember.gender === "m" ? "Male" : selectedMember.gender === "f" ? "Female" : "N/A"}
+                  <span style="color:var(--neon-cyan)">•</span> ${selectedMember.location || "Location N/A"}
+              </p>
+              
+              <div class="modal-details">
+                  <div class="detail-row">
+                      <span class="detail-label">Born:</span>
+                      <span class="detail-value">${selectedMember.birth_date || "N/A"}</span>
+                  </div>
+                  <div class="detail-row">
+                      <span class="detail-label">Died:</span>
+                      <span class="detail-value">${selectedMember.death_date || "N/A"}</span>
+                  </div>
+                  <div class="detail-row">
+                      <span class="detail-label">Occupation:</span>
+                      <span class="detail-value">${selectedMember.occupation || "N/A"}</span>
+                  </div>
+              </div>
+          </div>
+      </div>
+    `);
+    
+    // Show the modal
+    modal
+      .transition()
+      .duration(200)
+      .style("opacity", 1)
+      .style("pointer-events", "auto");
+    
+    closeMemberOptionsModal();
+  }
+});
+
+document.getElementById("view-tree-btn")?.addEventListener("click", () => {
+  if (selectedMember) {
+    closeMemberOptionsModal();
+    
+    // Close mobile drawer first
+    document.body.classList.remove("mobile-drawer-open");
+    
+    // Ensure ID is a number or string as expected by the transform function
+    const memberId = selectedMember.id;
+    
+    // Switch to their tree view
+    switchToIndividualFamilyView(currentView, memberId);
+  }
+});
+
+// Button Listeners - View Buttons (work for both desktop and mobile)
 document.querySelectorAll(".view-btn").forEach((btn) => {
   btn.addEventListener("click", (e) => {
-    const view = e.target.dataset.view;
+    const view = e.currentTarget.dataset.view;
 
-    // Update Buttons UI
+    // Update Buttons UI for all view buttons
     document
       .querySelectorAll(".view-btn")
       .forEach((b) => b.classList.remove("active"));
-    e.target.classList.add("active");
+    e.currentTarget.classList.add("active");
 
     if (view === "isometric") {
-      // Default to Individual Family for 3D View
       switchToIndividualFamilyView(view);
     } else {
-      // For other views, we might want to reset to full tree or keep current?
-      // User didn't specify, but to be safe and avoid getting stuck in Individual View
-      // when switching back to Tree, we should probably reset unless the user manually selected a filter.
-      // However, typical behavior is "View changes visualization, Filter changes data".
-      // But since we are FORCING data change on 3D, we should probably force it back on others?
-      // Let's stick to the specific request: "3d view should open default on individual family".
-      // We will NOT auto-reset for others to allow "Individual Family in Vertical Tree" if desired,
-      // UNLESS the user switches FROM 3D.
-      // Actually, if I switch to 3D -> Data becomes Individual.
-      // If I switch back to Tree -> Data STAYS Individual.
-      // This might be annoying if the user didn't realize data changed.
-      // But let's assume "Default on open" means "When I click 3D, make sure it's Individual".
-
       switchView(view);
     }
   });
 });
+
+// Focus/Filter functions for family views
+const switchToMyFamilyView = () => {
+  document.querySelectorAll(".focus-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("my-family")?.classList.add("active");
+  if (currentView === "fan") {
+    initFan();
+  } else if (currentView === "vertical-tree") {
+    initVerticalTreeV2();
+  } else {
+    switchView(currentView);
+  }
+};
+
+const switchToMaternalView = () => {
+  document.querySelectorAll(".focus-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("maternal-family")?.classList.add("active");
+  if (currentView === "fan") {
+    initFan();
+  } else if (currentView === "vertical-tree") {
+    initVerticalTreeV2();
+  } else {
+    switchView(currentView);
+  }
+};
+
+const switchToWifeView = () => {
+  document.querySelectorAll(".focus-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("wife-family")?.classList.add("active");
+  if (currentView === "fan") {
+    initFan();
+  } else if (currentView === "vertical-tree") {
+    initVerticalTreeV2();
+  } else {
+    switchView(currentView);
+  }
+};
+
+const switchToIndividualView = () => {
+  document.querySelectorAll(".focus-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("individual-family")?.classList.add("active");
+  switchToIndividualFamilyView(currentView);
+};
+
+// Focus Buttons - Desktop version (by ID)
+document.getElementById("my-family")?.addEventListener("click", () => {
+  switchToMyFamilyView();
+});
+
+document.getElementById("maternal-family")?.addEventListener("click", () => {
+  switchToMaternalView();
+});
+
+document.getElementById("wife-family")?.addEventListener("click", () => {
+  switchToWifeView();
+});
+
+document.getElementById("individual-family")?.addEventListener("click", () => {
+  switchToIndividualView();
+});
+
+// Focus Buttons - Mobile version (by class)
+document.querySelector(".my-family")?.addEventListener("click", () => {
+  switchToMyFamilyView();
+});
+
+document.querySelector(".maternal-family")?.addEventListener("click", () => {
+  switchToMaternalView();
+});
+
+document.querySelector(".wife-family")?.addEventListener("click", () => {
+  switchToWifeView();
+});
+
+document.querySelector(".individual-family")?.addEventListener("click", () => {
+  switchToIndividualView();
+});
+
+// Mobile menu toggles
+const mobileMenuBtn = document.getElementById("mobile-menu-btn");
+const mobileDrawerOverlay = document.getElementById("mobile-drawer-overlay");
+const mobileDrawerClose = document.querySelector(".mobile-drawer-close");
+
+function closeMobileDrawer() {
+  document.body.classList.remove("mobile-drawer-open");
+}
+
+function openMobileDrawer() {
+  document.body.classList.add("mobile-drawer-open");
+}
+
+mobileMenuBtn?.addEventListener("click", () => {
+  if (document.body.classList.contains("mobile-drawer-open")) {
+    closeMobileDrawer();
+  } else {
+    openMobileDrawer();
+  }
+});
+
+mobileDrawerOverlay?.addEventListener("click", closeMobileDrawer);
+mobileDrawerClose?.addEventListener("click", closeMobileDrawer);
 
 // Resize Listener
 window.addEventListener("resize", () => {
@@ -2285,22 +2460,38 @@ const switchToIndividualFamilyView = (targetView, targetId = null) => {
   }
 
   if (!targetNode) {
+    console.error("Could not find target user. ID:", targetId, "Available IDs:", 
+      Array.isArray(rawFamilyData) ? rawFamilyData.map(m => m.id) : (rawFamilyData.data || []).map(m => m.id));
     alert("Could not find the target user in the data.");
     return;
   }
 
-  // 2. Transform Data
-  // We use the new dedicated transformer function
-  // Note: transformToIndividualFamily must be available globally from transform-api-data.js
+  // 2. Transform Data to Individual Family
+  // First transform to individual family view
   const newData = transformToIndividualFamily(rawFamilyData, targetNode.id);
 
   if (!newData) {
+    console.error("Failed to generate Individual Family view for ID:", targetNode.id);
     alert("Failed to generate Individual Family view.");
     return;
   }
 
-  familyData = newData;
-  switchView(targetView || currentView);
+  // Set rawFamilyData to filtered data for views that use it (like fan)
+  rawFamilyData = newData;
+
+  // 3. Transform to hierarchy for tree visualization
+  familyData = transformFamilyData(newData);
+  
+  if (!familyData) {
+    familyData = newData;
+  }
+
+  // 4. Switch to the target view with the filtered data
+  if (targetView === "fan") {
+    initFan(String(targetId));
+  } else {
+    switchView(targetView);
+  }
 
   // Toast
   const toast = document.createElement("div");

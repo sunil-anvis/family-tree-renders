@@ -257,16 +257,8 @@ function transformToIndividualFamily(apiResponse, focusId = null) {
     }
     if (!focusPerson) return null;
 
-    // 3. Identify Root of this specific view (The Father/Mother)
-    // If no parents, the Focus Person is the root.
-    let viewRoot = null;
-    if (focusPerson.fid && _personMap.has(focusPerson.fid)) {
-        viewRoot = _personMap.get(focusPerson.fid);
-    } else if (focusPerson.mid && _personMap.has(focusPerson.mid)) {
-        viewRoot = _personMap.get(focusPerson.mid);
-    } else {
-        viewRoot = focusPerson;
-    }
+    // 3. Root at Focus Person
+    const viewRoot = focusPerson;
 
     // 4. Construct the Filtered Tree (Clone nodes to avoid breaking global cache)
     // Helper to shallow clone and reset children
@@ -274,48 +266,45 @@ function transformToIndividualFamily(apiResponse, focusId = null) {
 
     const newRoot = clone(viewRoot);
 
-    // If Root is Parent, add all their children (Siblings + Me)
-    // We need to look up the ORIGINAL children from the map to get siblings
-    // The _personMap nodes already have 'children' array populated by Phase 1 of standard transform.
-    // So we iterate viewRoot.children
+    // Add spouse
+    if (viewRoot.spouse) {
+        newRoot.spouse = clone(viewRoot.spouse);
+    }
 
-    // Check if viewRoot is actually the Parent (not Me)
-    if (viewRoot.id !== focusPerson.id) {
-        // We are at Parent Level
-        // Add Spouse (Mother) - already in 'spouse' property from standard transform? 
-        // Yes, Phase 1 step 3 attaches spouse. We just cloned it, so newRoot.spouse exists.
+    // Add children
+    if (viewRoot.children && viewRoot.children.length) {
+        viewRoot.children.forEach(child => {
+            newRoot.children.push(clone(child));
+        });
+    }
 
-        if (viewRoot.children && viewRoot.children.length) {
-            viewRoot.children.forEach(child => {
-                // This child is either Me or a Sibling
-                const newChild = clone(child);
-
-                if (child.id === focusPerson.id) {
-                    // It's ME!
-                    // Add My Spouse (Keep existing spouse prop)
-                    // Add My Children
-                    if (child.children && child.children.length) {
-                        child.children.forEach(grandChild => {
-                            newChild.children.push(clone(grandChild));
-                        });
-                    }
-                    newRoot.children.push(newChild);
-                } else {
-                    // It's a Sibling
-                    // Excluded per request: only keep father, mother, spouse, and kids.
-                }
-            });
+    // Add parents if they exist
+    if (focusPerson.fid && _personMap.has(focusPerson.fid)) {
+        const father = _personMap.get(focusPerson.fid);
+        const parentsNode = { id: 'parents_' + focusPerson.id, name: 'Parents', relation: 'Parents', children: [clone(father)] };
+        if (focusPerson.mid && _personMap.has(focusPerson.mid)) {
+            const mother = _personMap.get(focusPerson.mid);
+            parentsNode.children.push(clone(mother));
         }
-    } else {
-        // Me is Root (No Parents found)
-        // Just add My Children
-        if (viewRoot.children && viewRoot.children.length) {
-            viewRoot.children.forEach(child => {
-                newRoot.children.push(clone(child));
+        newRoot.children.push(parentsNode);
+    } else if (focusPerson.mid && _personMap.has(focusPerson.mid)) {
+        const mother = _personMap.get(focusPerson.mid);
+        const parentsNode = { id: 'parents_' + focusPerson.id, name: 'Parents', relation: 'Parents', children: [clone(mother)] };
+        newRoot.children.push(parentsNode);
+    }
+
+    // Add siblings
+    const parentId = focusPerson.fid || focusPerson.mid;
+    if (parentId && _personMap.has(parentId)) {
+        const parent = _personMap.get(parentId);
+        if (parent.children) {
+            parent.children.forEach(child => {
+                if (child.id !== focusPerson.id) {
+                    newRoot.children.push(clone(child));
+                }
             });
         }
     }
 
-    return cleanTree(newRoot, new Set()); // Clean up ids/circular refs usually, but our clones are fresh. 
-    // cleanTree removes 'fid', 'mid', 'pids'. Useful for D3.
+    return cleanTree(newRoot, new Set());
 }

@@ -12,7 +12,88 @@
 </head>
 
 <body>
-    <div id="view-controls" class="control-panel">
+    <button id="mobile-menu-btn" class="mobile-menu-btn" aria-label="Open menu"><i class="fa-solid fa-bars"></i></button>
+    <div id="mobile-drawer-overlay" class="mobile-drawer-overlay" tabindex="-1"></div>
+
+    <!-- Mobile Drawer Header -->
+    <div id="mobile-drawer-header" class="mobile-drawer-header">
+        <h3>Menu</h3>
+        <button class="mobile-drawer-close" aria-label="Close menu"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <!-- Mobile Drawer Container -->
+    <div id="mobile-drawer-container" class="mobile-drawer-container">
+        <!-- Controls Section -->
+        <div id="view-controls" class="control-panel control-panel-mobile">
+            <!-- Section 1: Views -->
+            <div class="control-group">
+                <span class="group-label">Views</span>
+                <div class="btn-pill-group">
+                    <button class="view-btn" data-view="globe" title="Globe View"><i class="fa-solid fa-earth-americas"></i><span class="btn-label">Globe</span></button>
+                    <button class="view-btn" data-view="tree" title="Tree View"><i class="fa-solid fa-tree"></i><span class="btn-label">Tree</span></button>
+                    <button class="view-btn active" data-view="vertical-tree" title="Vertical Tree"><i class="fa-solid fa-sitemap"></i><span class="btn-label">Vertical</span></button>
+                    <button class="view-btn" data-view="fan" title="Fan View"><i class="fa-solid fa-chart-pie"></i><span class="btn-label">Fan</span></button>
+                    <button class="view-btn" data-view="isometric" title="3D View"><i class="fa-solid fa-cube"></i><span class="btn-label">3D</span></button>
+                    <button class="view-btn" data-view="pedigree" title="Pedigree View"><i class="fa-solid fa-users-rectangle"></i><span class="btn-label">Pedigree</span></button>
+                </div>
+            </div>
+
+            <!-- Section 2: Focus -->
+            <div class="control-group">
+                <span class="group-label">Focus</span>
+                <div class="btn-pill-group">
+                    <button id="my-family" class="focus-btn" title="My Family"><i class="fa-solid fa-house-user"></i><span class="btn-label">My Family</span></button>
+                    <button id="maternal-family" class="focus-btn" title="Maternal Side"><i class="fa-solid fa-venus"></i><span class="btn-label">Maternal</span></button>
+                    <button id="wife-family" class="focus-btn" title="Wife / External"><i class="fa-solid fa-ring"></i><span class="btn-label">Wife</span></button>
+                    <button id="individual-family" class="focus-btn" title="Individual Family"><i class="fa-solid fa-user"></i><span class="btn-label">Individual</span></button>
+                </div>
+            </div>
+
+            <div id="fan-controls" class="sub-controls" style="display: none;">
+                <input type="checkbox" id="ancestor-mode" class="form-check-input">
+                <label for="ancestor-mode">Parents Mode</label>
+            </div>
+
+            <div id="iso-controls" class="sub-controls" style="display: none;">
+                <button class="btn-icon" onclick="setIsoAngle('iso')" title="Default"><i class="fa-solid fa-cube"></i></button>
+                <button class="btn-icon" onclick="setIsoAngle('top')" title="Top"><i class="fa-solid fa-layer-group"></i></button>
+                <button class="btn-icon" onclick="setIsoAngle('front')" title="Front"><i class="fa-solid fa-border-all"></i></button>
+            </div>
+
+            <!-- Section 3: Export & Tools -->
+            <div class="control-group">
+                <span class="group-label">Tools</span>
+                <div class="btn-pill-group">
+                    <button id="theme-toggle" class="export-btn-sm" style="color: #FFD700; background: rgba(255, 215, 0, 0.15);" title="Toggle Theme">
+                        <i class="fa-solid fa-sun"></i><span class="btn-label">Theme</span>
+                    </button>
+                    <button id="download-jpg" class="export-btn-sm" title="Download JPG">
+                        <i class="fa-solid fa-image"></i><span class="btn-label">JPG</span>
+                    </button>
+                    <button id="download-png" class="export-btn-sm" title="Download PNG">
+                        <i class="fa-regular fa-image"></i><span class="btn-label">PNG</span>
+                    </button>
+                    <button id="download-pdf" class="export-btn-sm" title="Download PDF">
+                        <i class="fa-solid fa-file-pdf"></i><span class="btn-label">PDF</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Family Members Section (below controls) -->
+        <div id="fan-member-sidebar" class="member-sidebar member-sidebar-mobile">
+            <div class="sidebar-header">
+                <h4>Family Members</h4>
+                <input type="text" id="member-search-mobile" placeholder="Search members..." class="form-control form-control-sm member-search-input">
+            </div>
+            <div id="member-list" class="sidebar-list">
+                <!-- Members will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Desktop control panel (hidden on mobile) -->
+    <div id="view-controls-desktop" class="control-panel control-panel-desktop">
         <!-- Section 1: Views -->
         <div class="control-group">
             <span class="group-label">Views</span>
@@ -68,19 +149,42 @@
         </div>
     </div>
 
-    <!-- Fan View Member Sidebar -->
-    <div id="fan-member-sidebar" class="member-sidebar">
+    <!-- Desktop Member Sidebar -->
+    <div id="fan-member-sidebar-desktop" class="member-sidebar member-sidebar-desktop">
         <div class="sidebar-header">
             <h4>Family Members</h4>
-            <input type="text" id="member-search" placeholder="Search members..." class="form-control form-control-sm">
+            <input type="text" id="member-search-desktop" placeholder="Search members..." class="form-control form-control-sm member-search-input">
         </div>
         <div id="member-list" class="sidebar-list">
             <!-- Members will be populated here -->
         </div>
     </div>
 
-
     <div id="tree-container"></div>
+
+    <!-- Member Options Modal -->
+    <div id="member-options-modal" class="member-options-modal">
+        <div class="member-options-content">
+            <button class="modal-close-btn" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+            <div class="member-options-header">
+                <img id="member-options-photo" src="" alt="Member" class="member-options-photo">
+                <div class="member-options-info">
+                    <h3 id="member-options-name">Name</h3>
+                    <p id="member-options-relation">Relation</p>
+                </div>
+            </div>
+            <div class="member-options-actions">
+                <button id="view-details-btn" class="member-action-btn details-btn">
+                    <i class="fa-solid fa-user"></i>
+                    <span>View Details</span>
+                </button>
+                <button id="view-tree-btn" class="member-action-btn tree-btn">
+                    <i class="fa-solid fa-sitemap"></i>
+                    <span>View Their Tree</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
