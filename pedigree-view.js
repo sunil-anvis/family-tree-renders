@@ -29,10 +29,10 @@ function initPedigreeView() {
     const V_GAP = 14;    // vertical gap between adjacent cards (equal everywhere)
     const BEND_R = 10;    // rounded corner radius for connectors
 
-    const LINE_COLOR = "#d2d8df";
-    const LINE_W = 2.6;
-    const MALE_BORDER = "#64b5f6";
-    const FEMALE_BORDER = "#f48fb1";
+    const LINE_COLOR = "#e2e8f0";
+    const LINE_W = 2.0;
+    const MALE_BORDER = "#51d1e3";
+    const FEMALE_BORDER = "#f5a3c7";
 
     // --- Build node map ---
     const flatList = Array.isArray(rawFamilyData) ? rawFamilyData : (rawFamilyData.data || []);
@@ -256,7 +256,6 @@ function initPedigreeView() {
             .attr("xlink:href", person.photo)
             .attr("x", avX - AVATAR_R).attr("y", -AVATAR_R)
             .attr("width", AVATAR_R * 2).attr("height", AVATAR_R * 2)
-            .attr("crossorigin", "anonymous")
             .attr("clip-path", `url(#${clipId})`)
             .attr("preserveAspectRatio", "xMidYMid slice");
 

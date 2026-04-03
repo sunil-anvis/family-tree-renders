@@ -9,6 +9,7 @@
         integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="stylesheet" href="index.css">
+    <link rel="icon" href="data:,">
 </head>
 
 <body>
@@ -39,7 +40,7 @@
             </div>
 
             <!-- Section 2: Focus -->
-            <div class="control-group">
+            <!-- <div class="control-group">
                 <span class="group-label">Focus</span>
                 <div class="btn-pill-group">
                     <button id="my-family" class="focus-btn" title="My Family"><i class="fa-solid fa-house-user"></i><span class="btn-label">My Family</span></button>
@@ -47,14 +48,14 @@
                     <button id="wife-family" class="focus-btn" title="Wife / External"><i class="fa-solid fa-ring"></i><span class="btn-label">Wife</span></button>
                     <button id="individual-family" class="focus-btn" title="Individual Family"><i class="fa-solid fa-user"></i><span class="btn-label">Individual</span></button>
                 </div>
+            </div> -->
+
+            <div id="fan-controls-mobile" class="sub-controls fan-controls-group" style="display: none;">
+                <input type="checkbox" id="ancestor-mode-mobile" class="form-check-input ancestor-mode-toggle">
+                <label for="ancestor-mode-mobile">Parents Mode</label>
             </div>
 
-            <div id="fan-controls" class="sub-controls" style="display: none;">
-                <input type="checkbox" id="ancestor-mode" class="form-check-input">
-                <label for="ancestor-mode">Parents Mode</label>
-            </div>
-
-            <div id="iso-controls" class="sub-controls" style="display: none;">
+            <div id="iso-controls-mobile" class="sub-controls iso-controls-group" style="display: none;">
                 <button class="btn-icon" onclick="setIsoAngle('iso')" title="Default"><i class="fa-solid fa-cube"></i></button>
                 <button class="btn-icon" onclick="setIsoAngle('top')" title="Top"><i class="fa-solid fa-layer-group"></i></button>
                 <button class="btn-icon" onclick="setIsoAngle('front')" title="Front"><i class="fa-solid fa-border-all"></i></button>
@@ -64,17 +65,11 @@
             <div class="control-group">
                 <span class="group-label">Tools</span>
                 <div class="btn-pill-group">
-                    <button id="theme-toggle" class="export-btn-sm" style="color: #FFD700; background: rgba(255, 215, 0, 0.15);" title="Toggle Theme">
+                    <button id="theme-toggle-mobile" class="theme-toggle export-btn-sm" title="Toggle Theme">
                         <i class="fa-solid fa-sun"></i><span class="btn-label">Theme</span>
                     </button>
-                    <button id="download-jpg" class="export-btn-sm" title="Download JPG">
-                        <i class="fa-solid fa-image"></i><span class="btn-label">JPG</span>
-                    </button>
-                    <button id="download-png" class="export-btn-sm" title="Download PNG">
-                        <i class="fa-regular fa-image"></i><span class="btn-label">PNG</span>
-                    </button>
-                    <button id="download-pdf" class="export-btn-sm" title="Download PDF">
-                        <i class="fa-solid fa-file-pdf"></i><span class="btn-label">PDF</span>
+                    <button id="download-btn-mobile" class="download-open-btn export-btn-sm" title="Download Tree" aria-label="Download Tree">
+                        <i class="fa-solid fa-download"></i><span class="btn-label">Download</span>
                     </button>
                 </div>
             </div>
@@ -86,7 +81,7 @@
                 <h4>Family Members</h4>
                 <input type="text" id="member-search-mobile" placeholder="Search members..." class="form-control form-control-sm member-search-input">
             </div>
-            <div id="member-list" class="sidebar-list">
+            <div id="member-list-mobile" class="member-list-container sidebar-list">
                 <!-- Members will be populated here -->
             </div>
         </div>
@@ -108,7 +103,7 @@
         </div>
 
         <!-- Section 2: Focus -->
-        <div class="control-group">
+        <!-- <div class="control-group">
             <span class="group-label">Focus</span>
             <div class="btn-pill-group">
                 <button id="my-family" class="focus-btn" title="My Family"><i class="fa-solid fa-house-user"></i></button>
@@ -116,14 +111,14 @@
                 <button id="wife-family" class="focus-btn" title="Wife / External"><i class="fa-solid fa-ring"></i></button>
                 <button id="individual-family" class="focus-btn" title="Individual Family"><i class="fa-solid fa-user"></i></button>
             </div>
+        </div> -->
+
+        <div id="fan-controls-desktop" class="sub-controls fan-controls-group" style="display: none;">
+            <input type="checkbox" id="ancestor-mode-desktop" class="form-check-input ancestor-mode-toggle">
+            <label for="ancestor-mode-desktop">Parents Mode</label>
         </div>
 
-        <div id="fan-controls" class="sub-controls" style="display: none;">
-            <input type="checkbox" id="ancestor-mode" class="form-check-input">
-            <label for="ancestor-mode">Parents Mode</label>
-        </div>
-
-        <div id="iso-controls" class="sub-controls" style="display: none;">
+        <div id="iso-controls-desktop" class="sub-controls iso-controls-group" style="display: none;">
             <button class="btn-icon" onclick="setIsoAngle('iso')" title="Default"><i class="fa-solid fa-cube"></i></button>
             <button class="btn-icon" onclick="setIsoAngle('top')" title="Top"><i class="fa-solid fa-layer-group"></i></button>
             <button class="btn-icon" onclick="setIsoAngle('front')" title="Front"><i class="fa-solid fa-border-all"></i></button>
@@ -133,17 +128,11 @@
         <div class="control-group ms-auto">
             <span class="group-label">Tools</span>
             <div class="btn-pill-group">
-                <button id="theme-toggle" class="export-btn-sm" style="color: #FFD700; background: rgba(255, 215, 0, 0.15);" title="Toggle Theme">
+                <button id="theme-toggle-desktop" class="theme-toggle export-btn-sm" title="Toggle Theme">
                     <i class="fa-solid fa-sun"></i>
                 </button>
-                <button id="download-jpg" class="export-btn-sm" title="Download JPG">
-                    <i class="fa-solid fa-image"></i>
-                </button>
-                <button id="download-png" class="export-btn-sm" title="Download PNG">
-                    <i class="fa-regular fa-image"></i>
-                </button>
-                <button id="download-pdf" class="export-btn-sm" title="Download PDF">
-                    <i class="fa-solid fa-file-pdf"></i>
+                <button id="download-btn-desktop" class="download-open-btn export-btn-sm" title="Download Tree" aria-label="Download Tree">
+                    <i class="fa-solid fa-download"></i>
                 </button>
             </div>
         </div>
@@ -155,7 +144,7 @@
             <h4>Family Members</h4>
             <input type="text" id="member-search-desktop" placeholder="Search members..." class="form-control form-control-sm member-search-input">
         </div>
-        <div id="member-list" class="sidebar-list">
+        <div id="member-list-desktop" class="member-list-container sidebar-list">
             <!-- Members will be populated here -->
         </div>
     </div>
@@ -186,17 +175,40 @@
         </div>
     </div>
 
+    <!-- Export Selection Modal -->
+    <div id="export-selection-modal" class="member-options-modal">
+        <div class="member-options-content export-selection-content">
+            <button class="modal-close-btn" aria-label="Close" id="close-export-modal"><i class="fa-solid fa-xmark"></i></button>
+            <div class="member-options-header">
+                <div class="export-icon-header">
+                    <i class="fa-solid fa-cloud-arrow-down" style="font-size: 40px; color: var(--neon-cyan); margin-bottom: 10px; display: block;"></i>
+                </div>
+                <h3 class="export-modal-title">Download Tree</h3>
+                <p class="export-modal-subtitle">Select a format to save your current view.</p>
+            </div>
+            <div class="member-options-actions export-format-actions">
+                <button class="member-action-btn export-format-btn" data-format="jpg">
+                    <i class="fa-solid fa-image" style="color: #4ecca3;"></i>
+                    <span>High Quality JPG</span>
+                </button>
+                <button class="member-action-btn export-format-btn" data-format="png">
+                    <i class="fa-regular fa-image" style="color: #64b5f6;"></i>
+                    <span>Transparent PNG</span>
+                </button>
+                <button class="member-action-btn export-format-btn" data-format="pdf">
+                    <i class="fa-solid fa-file-pdf" style="color: #f48fb1;"></i>
+                    <span>Printable PDF</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
     
     <!-- Export Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-    <!-- Three.js (Core) -->
-    <script src="https://unpkg.com/three@0.132.2/build/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://unpkg.com/three@0.132.2/examples/js/loaders/GLTFLoader.js"></script>
 
     <!-- Globe.gl (Includes Three.js) -->
     <script src="//unpkg.com/globe.gl"></script>
@@ -205,8 +217,8 @@
     <script src="transform-api-data.js"></script>
     <script src="globe_view.js"></script>
     <script src="3d-view.js"></script>
-    <script src="try-3d-view.js"></script> <!-- New True 3D View -->
-    <script src="pedigree-view.js?v=8"></script> <!-- Pedigree View -->
+    <script src="pedigree-view.js"></script> <!-- Pedigree View -->
+    <script src="data.js"></script>
     <script src="index.js"></script>
 </body>
 

@@ -459,68 +459,57 @@ function initFan(startNodeId = null) {
         .attr("class", "fan-labels")
         .attr("transform", `translate(0, 0)`);
 
+    const defs = fanGroup.append("defs");
+    
+    // Helper to make ID safe
+    const getSafeId = (id) => id ? "clip-" + id.toString().replace(/[^a-zA-Z0-9_-]/g, "_") : "clip-null";
+
+    defs.selectAll("clipPath")
+        .data(finalRenderNodes)
+        .enter().append("clipPath")
+        .attr("id", d => getSafeId(d.data.id))
+        .append("path")
+        .attr("d", arc);
+
     const maxAnglesCheck = (d) => (d.x0 !== undefined && d.x1 !== undefined && !isNaN(d.x0) && !isNaN(d.x1));
 
     const labels = labelGroup.selectAll(".fan-label")
         .data(finalRenderNodes)
         .enter().append("g")
         .attr("class", "fan-label")
+        .attr("clip-path", d => (d.depth > 0 && !d.isPlusButton) ? `url(#${getSafeId(d.data.id)})` : null)
         .attr("transform", d => {
             if (!maxAnglesCheck(d)) return "translate(-9999,-9999)"; // Safety offscreen instead of 0,0
 
-            // Fix for Full Ring Centroid Bug:
-            // d3.arc().centroid(d) returns [0,0] if the arc is a full circle (or near it).
-            // We need to manually calculate the position based on mid-angle and mid-radius.
-
-            const midAngle = (d.x0 + d.x1) / 2;
-            const r = (d.y0 + d.y1) / 2;
-
-            // Convert Polar to Cartesian
-            // Note: d3 arc angles, 0 is at 12 o'clock (-PI/2 in standard trig)? 
-            // d3.arc startAngle 0 is 12 o'clock usually defined in arc generator? 
-            // Wait, d3.arc default 0 is 12 o'clock.
-            // But let's verify standard d3 usage. Usually 0 is up.
-            // Cartesian: x = r * sin(angle), y = -r * cos(angle) for 0 at 12oclock.
-
-            let cx, cy;
-            // If angle is large (e.g. > 300 degrees), centroid falls to center.
-            // 300 deg = 5.23 rad.
-            // Let's just ALWAYS use polar calc for consistency? 
-            // Centroid is center of mass (area). For simple annular sector, it's slightly different from mid-radius.
-            // But for text, mid-radius is usually better aligned.
-            // Let's switch to polar calc for ALL labels to be safe and consistent.
-
-            cx = r * Math.sin(midAngle);
-            cy = -r * Math.cos(midAngle);
-
-            const deg = midAngle * 180 / Math.PI; // 0 at Top, 90 at Right, 180 Bottom
-
-            // 1. Me Node: Center
             if (d.depth === 0) return `translate(0, 0)`;
 
-            // 2. Others: Rotate to align with slice
-            let rotate = 0;
-
-            if (d.depth === 1) {
-                // For Depth 1 (Ring around center), we want text upright?
-                // If we follow the ring curve?
-                // Standard Fan: Text is radial or tangential.
-                // Existing code was tangential (rotated).
-                // Let's keep tangential but ensure correct flip.
-                rotate = (deg > 90 && deg < 270) ? deg + 180 : deg;
-            } else {
-                rotate = (deg < 180) ? (deg - 90) : (deg + 90);
-            }
-            return `translate(${cx}, ${cy}) rotate(${rotate})`;
+            return `translate(0,0)`;
         })
         .style("pointer-events", "none");
 
     labels.each(function (d) {
         if (!maxAnglesCheck(d)) return;
 
-        const el = d3.select(this);
+        const container = d3.select(this);
+        let el = container;
 
-        // Me Node (Text Mode)
+        const midAngle = (d.x0 + d.x1) / 2;
+        const r = (d.y0 + d.y1) / 2;
+        const cx = r * Math.sin(midAngle);
+        const cy = -r * Math.cos(midAngle);
+        const deg = midAngle * 180 / Math.PI;
+
+        if (d.depth > 0 && !d.isPlusButton) {
+            let rotate = 0;
+            if (d.depth === 1) {
+                rotate = (deg > 90 && deg < 270) ? deg + 180 : deg;
+            } else {
+                rotate = (deg < 180) ? (deg - 90) : (deg + 90);
+            }
+            el = container.append("g")
+                .attr("transform", `translate(${cx}, ${cy}) rotate(${rotate})`);
+        }
+
         // Me Node (Center)
         if (d.depth === 0) {
             el.attr("text-anchor", "middle")
@@ -542,21 +531,16 @@ function initFan(startNodeId = null) {
                 el.append("text")
                     .text(d.data.relation)
                     .attr("y", 12)
+                    .attr("dy", 0)
                     .style("font-size", "10px")
-                    .style("fill", "#555");
+                    .style("fill", "#555")
+                    .call(wrap, 90); // added wrap here to prevent overflow in center
             }
             return;
         }
 
         // Expand Button Text (Dynamic or Depth Limit)
         if (d.isPlusButton) {
-            // Re-center for the Plus symbol to ensure it's un-rotated IF we want upright.
-            // But the transform above applies rotation.
-            // Let's undo rotation for the Plus sign if we want it perfect, 
-            // or just let it rotate. Rotated Plus is an 'X'. 
-            // We want a Plus '+'. 
-
-            // Undo rotation for clarity:
             el.attr("transform", function () {
                 const centroid = arc.centroid(d);
                 return `translate(${centroid[0]}, ${centroid[1]})`;
@@ -580,12 +564,10 @@ function initFan(startNodeId = null) {
 
         // --- Calculate Available Space ---
         const radialThickness = d.y1 - d.y0 - 10; // 5px padding
-        const midRadius = (d.y0 + d.y1) / 2;
-        const arcLength = (d.x1 - d.x0) * midRadius;
+        const arcLength = (d.x1 - d.x0) * ((d.y0 + d.y1) / 2);
 
         let availableWidth, availableHeight;
 
-        // Determine Orientation based on Depth
         // Depth 1 is Tangential (Text runs along the ring)
         // Depth > 1 is Radial (Text runs outward/inward along radius)
         const isTangential = (d.depth === 1);
@@ -602,37 +584,45 @@ function initFan(startNodeId = null) {
         let nameFontSize = 10;
         let relFontSize = 8;
 
-        // Constrain height (Font Size)
-        // We have 2 lines: Name (~60%) + Relation (~40%)
         const maxTextHeight = Math.max(availableHeight * 0.8, 2);
 
         // Standard sizing
         nameFontSize = Math.min(14, maxTextHeight * 0.6);
         relFontSize = Math.min(10, maxTextHeight * 0.4);
 
-        // If height is tight, scale down
-        // Ensure relation is not bigger than name
         if (relFontSize > nameFontSize) relFontSize = nameFontSize * 0.8;
 
-        // Min sizes
         if (nameFontSize < 3) nameFontSize = 0;
         if (relFontSize < 2.5) relFontSize = 0;
 
         // --- 2. Truncation Helper ---
-        function truncateAndAppend(textObj, fullText, maxWidth) {
-            let currentLen = textObj.node().getComputedTextLength();
-            if (currentLen <= maxWidth) return;
+        function truncateAndAppend(textObj, fullText, maxWidth, fontSize) {
+            if (!fullText) return;
+            const charWidth = fontSize * 0.55; 
+            if (fullText.length * charWidth <= maxWidth) {
+                textObj.text(fullText);
+                return;
+            }
+            
+            // For longer text like "Relation (Detailed)", drop parenthesis if needed
+            const noParen = fullText.replace(/\s*\(.*?\)/, '');
+            if (noParen.length !== fullText.length && noParen.length * charWidth <= maxWidth) {
+                textObj.text(noParen);
+                return;
+            }
 
-            let textVal = fullText;
-            // Binary search or iterative? Iterative is fine for small strings.
-            // Faster approach: guess based on char width?
-            // Let's stick to iterative to be properly "System 2" precise as requested.
-
-            while (currentLen > maxWidth && textVal.length > 0) {
-                // Remove chunks? one char is safe.
-                textVal = textVal.slice(0, -1);
-                textObj.text(textVal + "...");
-                currentLen = textObj.node().getComputedTextLength();
+            let maxChars = Math.floor(maxWidth / charWidth) - 2;
+            if (maxChars <= 0) {
+                textObj.text("");
+                return;
+            }
+            
+            // Truncate cleanly using the shorter text base if possible
+            let baseText = (noParen.length < fullText.length && noParen.length > 3) ? noParen : fullText;
+            if (maxChars < baseText.length) {
+                textObj.text(baseText.slice(0, maxChars) + "..");
+            } else {
+                textObj.text(baseText);
             }
         }
 
@@ -648,7 +638,7 @@ function initFan(startNodeId = null) {
                 .style("font-weight", "bold")
                 .style("pointer-events", "none");
 
-            truncateAndAppend(nameText, name, availableWidth);
+            truncateAndAppend(nameText, name, availableWidth, nameFontSize);
         }
 
         if (relFontSize > 0) {
@@ -659,7 +649,7 @@ function initFan(startNodeId = null) {
                 .style("fill", "#444")
                 .style("pointer-events", "none");
 
-            truncateAndAppend(relText, relationText, availableWidth);
+            truncateAndAppend(relText, relationText, availableWidth, relFontSize);
         }
     });
 

@@ -21,9 +21,10 @@ let _personMap = null;
  * Main Transformation Function
  * @param {Object} apiResponse - The raw data from API
  * @param {string|null} focusId - The ID of the person to focus the tree on (optional)
+ * @param {boolean} rootAtFocus - If true, use focus person as root directly
  * @returns {Object|null} - The root of the hierarchical tree
  */
-function transformApiDataToHierarchy(apiResponse, focusId = null) {
+function transformApiDataToHierarchy(apiResponse, focusId = null, rootAtFocus = false) {
     const apiData = apiResponse.data || apiResponse;
     if (!Array.isArray(apiData)) return null;
 
@@ -142,7 +143,7 @@ function transformApiDataToHierarchy(apiResponse, focusId = null) {
         return current;
     }
 
-    const ancestorRoot = findEldestAncestor(focusPerson);
+    const ancestorRoot = rootAtFocus ? focusPerson : findEldestAncestor(focusPerson);
 
     // ---------------------------------------------------------
     // PHASE 3: Build & Clean Tree
@@ -220,9 +221,9 @@ function isApiFormat(data) {
 /**
  * Entry Point: Main transformer function
  */
-function transformFamilyData(data, focusId = null) {
+function transformFamilyData(data, focusId = null, rootAtFocus = false) {
     if (isApiFormat(data)) {
-        return transformApiDataToHierarchy(data, focusId);
+        return transformApiDataToHierarchy(data, focusId, rootAtFocus);
     }
     return data;
 }
@@ -304,6 +305,100 @@ function transformToIndividualFamily(apiResponse, focusId = null) {
                 }
             });
         }
+    }
+
+    return cleanTree(newRoot, new Set());
+}
+
+/**
+ * Filtered Transformation: Individual Family Tree (Standard Hierarchy)
+ * "Individual Family" = Parents -> [Siblings, Me -> [Kids]]
+ * 
+ * This is specifically designed for tree-based views (like 3D/Isometric)
+ * where a clear top-down generation structure is needed.
+ */
+function transformToIndividualFamilyTree(apiResponse, focusId = null) {
+    const apiData = apiResponse.data || apiResponse;
+    if (!Array.isArray(apiData)) return null;
+
+    // 1. Ensure Map is Built and Current
+    // If the map exists but doesn't have the focusId, it might be stale.
+    // However, in this app, rawFamilyData is consistent.
+    if (!_personMap) {
+        transformApiDataToHierarchy(apiResponse);
+    }
+
+    // 2. Identify Focus Person
+    let focusPerson = null;
+    const searchId = focusId ? String(focusId) : null;
+
+    if (searchId && _personMap.has(searchId)) {
+        focusPerson = _personMap.get(searchId);
+        console.log(`[Hierarchy] Found focal person by ID: ${searchId} (${focusPerson.name})`);
+    } else {
+        // Fallback to "Me"/Myself
+        focusPerson = [..._personMap.values()].find(p => p.isMe);
+        if (focusId) {
+            console.warn(`[Hierarchy] Requested focusId ${focusId} NOT FOUND in map. Defaulting to: ${focusPerson?.name}`);
+        }
+    }
+
+    if (!focusPerson) {
+        console.error("[Hierarchy] No focus person found in dataset.");
+        return null;
+    }
+
+    // 3. Find Parents
+    let parentRoot = null;
+    const fatherId = focusPerson.fid;
+    const motherId = focusPerson.mid;
+
+    // Use Father as primary root if available, otherwise Mother
+    if (fatherId && _personMap.has(fatherId)) {
+        parentRoot = _personMap.get(fatherId);
+    } else if (motherId && _personMap.has(motherId)) {
+        parentRoot = _personMap.get(motherId);
+    }
+
+    // Helper to shallow clone and reset children
+    const clone = (n) => ({ ...n, children: [] });
+
+    // 4. Case A: No Parents Found (Focus is the root)
+    if (!parentRoot) {
+        const newRoot = clone(focusPerson);
+        if (focusPerson.spouse) newRoot.spouse = clone(focusPerson.spouse);
+        if (focusPerson.children) {
+            focusPerson.children.forEach(child => newRoot.children.push(clone(child)));
+        }
+        return cleanTree(newRoot, new Set());
+    }
+
+    // 5. Case B: Parents Found (Parents are the root)
+    const newRoot = clone(parentRoot);
+    
+    // Add parent's spouse if not already the root
+    if (parentRoot.id === fatherId && motherId && _personMap.has(motherId)) {
+        newRoot.spouse = clone(_personMap.get(motherId));
+    } else if (parentRoot.id === motherId && fatherId && _personMap.has(fatherId)) {
+        newRoot.spouse = clone(_personMap.get(fatherId));
+    }
+
+    // Add Siblings and "Me" as children of the parent root
+    if (parentRoot.children) {
+        parentRoot.children.forEach(sibling => {
+            const siblingClone = clone(sibling);
+            
+            // If this is "Me", add my children
+            if (sibling.id === focusPerson.id) {
+                if (sibling.spouse) siblingClone.spouse = clone(sibling.spouse);
+                if (sibling.children) {
+                    sibling.children.forEach(child => siblingClone.children.push(clone(child)));
+                    // Note: In this view, we ONLY show children of "Me", not children of siblings.
+                }
+            }
+            
+            newRoot.children.push(siblingClone);
+        });
     }
 
     return cleanTree(newRoot, new Set());

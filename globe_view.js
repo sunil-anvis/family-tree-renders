@@ -80,7 +80,6 @@ function initThreeGlobe() {
                     el.style.overflow = 'hidden'; // Clip image to pin shape
 
                     const img = document.createElement('img');
-                    img.crossOrigin = "anonymous";
                     const photoUrl = d.originalData.photo || '//unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
                     img.src = photoUrl;
                     img.onerror = () => { img.src = 'https://api.kintree.com/kintree-assets/images/default-avatars/male.png'; };

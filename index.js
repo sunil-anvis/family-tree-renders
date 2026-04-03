@@ -22,9 +22,25 @@ function initApp() {
   switchView(currentView);
 }
 
-// Global Dimensions
+// Global Dimensions (Updated dynamically on resize)
 let width = window.innerWidth;
 let height = window.innerHeight;
+
+// Global Resize Listener
+window.addEventListener("resize", () => {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  
+  // Update SVG attributes
+  d3.select("#tree-container svg")
+    .attr("width", width)
+    .attr("height", height);
+  
+  // Re-render current view if active
+  if (typeof currentView !== "undefined" && typeof switchView === "function") {
+    switchView(currentView);
+  }
+});
 
 // Globe State
 let globeData = {};
@@ -491,7 +507,6 @@ function initTree() {
       .attr("y", -20)
       .attr("width", 40)
       .attr("height", 40)
-      .attr("crossorigin", "anonymous")
       .attr("clip-path", `url(#${clipId})`)
       .attr("preserveAspectRatio", "xMidYMid slice");
 
@@ -562,10 +577,14 @@ function initFan(startNodeId = null) {
   svg.on(".zoom", null);
 
   // 3. Set Background for Fan View based on Theme
-  const bgColor = (typeof window.isDarkMode !== "undefined" && !window.isDarkMode) ? "white" : "black";
+  const bgColor = (typeof window.isDarkMode !== "undefined" && !window.isDarkMode) ? "#ffffff" : "#171717";
   svg.style("background", bgColor);
 
-  const radius = Math.min(width, height) * 0.65;
+  // 4. Responsive Radius Calculation
+  // We use a base factor that leaves room for labels and buttons.
+  // 0.4 ensures the diameter is 80% of the smallest screen dimension.
+  const isMobile = width < 600;
+  const radius = Math.min(width, height) * 0.4;
 
   // Helper: Text Wrapping Function
   function wrap(text, width) {
@@ -755,18 +774,18 @@ function initFan(startNodeId = null) {
 
   // Color Palette Theme Split
   const lightColors = [
-    "#BDD7EF", // Blue (Me)
-    "#FFACFC",
-    "#FEF28D",
-    "#A8F48D",
-    "#FE96FA",
+    "#b5e2ff",
+    "#ffa4c6",
+    "#a6f6af",
+    "#ffd1a4",
+    "#dff2cd",
   ];
   const darkColors = [
-    "#DDEEFF",
-    "#FFAFAF",
-    "#FFE078",
-    "#F3A5FF",
-    "#FF669E",
+    "#4daee5",
+    "#e26a97",
+    "#59c864",
+    "#dc9856",
+    "#8eb170",
   ];
   
   const genColors = (typeof window.isDarkMode !== "undefined" && !window.isDarkMode) ? lightColors : darkColors;
@@ -1132,13 +1151,14 @@ function initFan(startNodeId = null) {
         .style("pointer-events", "none");
 
       // Name
+      const meNameSize = isMobile ? "12px" : "14px";
       el.append("text")
         .text(d.data.name)
-        .attr("y", -10) // Moved up slightly to accommodate multiple lines
+        .attr("y", -8)
         .attr("dy", 0)
-        .style("font-size", "14px")
+        .style("font-size", meNameSize)
         .style("font-weight", "bold")
-        .call(wrap, 100); // Wrap width ~100px (Center circle is roughly 120px wide)
+        .call(wrap, isMobile ? 80 : 100);
 
       // Relation (e.g., "Family Member" or "Myself")
       if (d.data.relation) {
@@ -1183,15 +1203,15 @@ function initFan(startNodeId = null) {
 
     // Dynamic Font Size
     const angle = d.x1 - d.x0; // Radians
-    let fontSize = 8; // Reduced base
-
+    let fontSize = isMobile ? 6 : 8; // Reduced base for mobile
+    
     // Scale down for smaller slices
-    if (angle < 0.25) fontSize = 7;
-    if (angle < 0.2) fontSize = 6;
-    if (angle < 0.15) fontSize = 5;
-    if (angle < 0.1) fontSize = 4;
-    if (angle < 0.06) fontSize = 3;
-    if (angle < 0.03) fontSize = 2; // Tiny
+    if (angle < 0.25) fontSize = isMobile ? 5 : 7;
+    if (angle < 0.2) fontSize = isMobile ? 4.5 : 6;
+    if (angle < 0.15) fontSize = isMobile ? 4 : 5;
+    if (angle < 0.1) fontSize = isMobile ? 3.5 : 4;
+    if (angle < 0.06) fontSize = isMobile ? 3 : 3;
+    if (angle < 0.03) fontSize = isMobile ? 1.5 : 2; // Tiny
 
     // Apply
     el.attr("text-anchor", "middle")
@@ -1225,9 +1245,20 @@ function initFan(startNodeId = null) {
       scene.attr("transform", event.transform);
     });
 
+  // Initial Transform: Dynamic "Fit to Viewport" Scale
+  // Calculate a scale that ensures the radius fits with a 10% safety margin.
+  // Radius is roughly min(width, height) * 0.4.
+  // So Diameter is min(width, height) * 0.8.
+  // A scale of 0.9 on top of that ensures 80% * 0.9 = 72% of screen is used,
+  // which guarantees no clipping across any aspect ratio.
+  const initialScale = 0.9; 
+  const initialTransform = d3.zoomIdentity
+    .translate(width / 2, height / 2)
+    .scale(initialScale);
+
   svg
     .call(zoom)
-    .call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
+    .call(zoom.transform, initialTransform);
 
   // Add "Back" button if we are deep (not at true root)
   // --- Navigation Buttons (Back & Reset) ---
@@ -1513,7 +1544,6 @@ function initVerticalTree() {
       .attr("y", -20)
       .attr("width", 40)
       .attr("height", 40)
-      .attr("crossorigin", "anonymous")
       .attr("clip-path", `url(#${clipId})`)
       .attr("preserveAspectRatio", "xMidYMid slice");
 
@@ -1587,40 +1617,32 @@ function switchView(view) {
   const svgEl = document.querySelector("#tree-container svg");
   if (svgEl) svgEl.style.display = "block";
 
-  // 3. UI Controls
-  const fanSidebar = document.getElementById("fan-member-sidebar");
-  if (view === "fan") {
-    document.getElementById("fan-controls").style.display = "flex";
-    if (fanSidebar) {
-      fanSidebar.style.display = "flex";
-      populateMemberList(); // Ensure list is populated
+  // 3. UI Controls - Member Sidebar (Desktop & Mobile)
+  const fanControls = document.querySelectorAll(".fan-controls-group");
+  const isoControls = document.querySelectorAll(".iso-controls-group");
+  const fanSidebarMobile = document.getElementById("fan-member-sidebar");
+  const fanSidebarDesktop = document.getElementById("fan-member-sidebar-desktop");
+  
+  if (view === "fan" || view === "isometric") {
+    if (view === "fan") {
+      fanControls.forEach(el => el.style.display = "flex");
+      isoControls.forEach(el => el.style.display = "none");
+    } else if (view === "isometric") {
+      isoControls.forEach(el => el.style.display = "flex");
+      fanControls.forEach(el => el.style.display = "none");
     }
-    // Reset Fan State
-    fanHistory = [];
-    currentFanRootId = null;
-  } else if (view === "isometric" || view === "true-3d") {
-    // 3D Views get the sidebar too
-    const fanControls = document.getElementById("fan-controls");
-    if (fanControls) fanControls.style.display = "none";
-    if (fanSidebar) {
-      fanSidebar.style.display = "flex";
-      populateMemberList(); // Ensure list is populated
-    }
+    
+    if (fanSidebarMobile) fanSidebarMobile.style.display = "flex";
+    if (fanSidebarDesktop) fanSidebarDesktop.style.display = "flex";
+    populateMemberList();
   } else {
-    const fanControls = document.getElementById("fan-controls");
-    if (fanControls) fanControls.style.display = "none"; // Safety check
-    if (fanSidebar) fanSidebar.style.display = "none";
+    // Hide Fan UI by default for other views
+    fanControls.forEach(el => el.style.display = "none");
+    isoControls.forEach(el => el.style.display = "none");
+    if (fanSidebarMobile) fanSidebarMobile.style.display = "none";
+    if (fanSidebarDesktop) fanSidebarDesktop.style.display = "none";
   }
 
-  // Isometric Controls
-  const isoControls = document.getElementById("iso-controls");
-  if (isoControls) {
-    if (view === "isometric") {
-      isoControls.style.display = "flex";
-    } else {
-      isoControls.style.display = "none";
-    }
-  }
 
   // 4. View Initialization
   if (view === "fan") {
@@ -1628,10 +1650,26 @@ function switchView(view) {
   } else if (view === "tree") {
     initTree();
   } else if (view === "vertical-tree") {
+    // Apply focal filter if we have re-rooted via list
+    if (typeof currentFanRootId !== "undefined" && currentFanRootId) {
+      console.log(`[SwitchView] Rooting Vertical Tree on: ${currentFanRootId}`);
+      familyData = transformFamilyData(rawFamilyData, currentFanRootId, true);
+    }
     initVerticalTreeV2();
   } else if (view === "isometric") {
+    // Filter 3D view to only show Root, Parents, Siblings, and Children
+    const focusId = (typeof currentFanRootId !== "undefined" && currentFanRootId) ? currentFanRootId : null;
+    console.log(`[SwitchView] Applying 3D focal filter for ID: ${focusId}`);
+    const filtered = transformToIndividualFamilyTree(rawFamilyData, focusId);
+    if (filtered) {
+      familyData = filtered;
+    }
     init3DTree();
   } else if (view === "pedigree") {
+    // Pedigree should also respect focus
+    if (typeof currentFanRootId !== "undefined" && currentFanRootId) {
+       familyData = transformFamilyData(rawFamilyData, currentFanRootId, true);
+    }
     initPedigreeView();
   } else if (view === "true-3d") {
     // [NEW] True 3D View
@@ -1650,10 +1688,35 @@ function switchView(view) {
   }
 }
 
+// View Button Click Listeners
+document.querySelectorAll(".view-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    // 1. Update UI (Active State)
+    document
+      .querySelectorAll(".view-btn")
+      .forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+
+    // 2. Switch View
+    const selectedView = btn.dataset.view;
+    console.log("Switching to view:", selectedView);
+    switchView(selectedView);
+  });
+});
+
 // Checkbox Listener
-document.getElementById("ancestor-mode").addEventListener("change", (e) => {
-  ancestorMode = e.target.checked;
-  if (currentView === "fan") initFan();
+// Checkbox Listener (Sync both mobile and desktop toggles)
+document.querySelectorAll(".ancestor-mode-toggle").forEach(toggle => {
+  toggle.addEventListener("change", (e) => {
+    ancestorMode = e.target.checked;
+    
+    // Sync other toggles
+    document.querySelectorAll(".ancestor-mode-toggle").forEach(t => {
+      if (t !== e.target) t.checked = ancestorMode;
+    });
+
+    if (currentView === "fan") initFan();
+  });
 });
 
 // Member Sidebar Logic
@@ -1677,8 +1740,11 @@ function closeMemberOptionsModal() {
 }
 
 function populateMemberList() {
-  const listContainer = document.getElementById("member-list");
-  if (!listContainer || !rawFamilyData) return;
+  const containers = document.querySelectorAll(".member-list-container");
+  if (containers.length === 0 || !rawFamilyData) return;
+
+  // Avoid multiple populations if called quickly (though d3 or list is small)
+  containers.forEach(container => container.innerHTML = "");
 
   const list = Array.isArray(rawFamilyData) ? rawFamilyData : (rawFamilyData.data || []);
   console.log("Populating member list. Total members in raw data:", list.length);
@@ -1689,8 +1755,9 @@ function populateMemberList() {
     const nameB = b.name || "";
     return nameA.localeCompare(nameB);
   });
+  // Clean all containers
+  containers.forEach(container => container.innerHTML = "");
 
-  listContainer.innerHTML = "";
   sortedList.forEach(member => {
     const item = document.createElement("div");
     item.className = "member-item";
@@ -1702,10 +1769,13 @@ function populateMemberList() {
         <span class="member-item-relation">${member.relation || ''}</span>
       </div>
     `;
-    item.addEventListener("click", () => {
-      showMemberOptionsModal(member);
+    containers.forEach(container => {
+      const clone = item.cloneNode(true);
+      clone.addEventListener("click", () => {
+        showMemberOptionsModal(member);
+      });
+      container.appendChild(clone);
     });
-    listContainer.appendChild(item);
   });
 }
 
@@ -1771,29 +1841,26 @@ document.getElementById("view-details-btn")?.addEventListener("click", () => {
       </div>
     `);
     
-    // Show the modal
-    modal
-      .transition()
-      .duration(200)
-      .style("opacity", 1)
-      .style("pointer-events", "auto");
-    
+    // CAPTURE DATA FIRST before closing modal resets selectedMember
+    const memberData = { ...selectedMember };
     closeMemberOptionsModal();
+    showModal({ data: memberData });
   }
 });
 
 document.getElementById("view-tree-btn")?.addEventListener("click", () => {
   if (selectedMember) {
+    // CAPTURE DATA FIRST
+    const memberId = selectedMember.id;
+    
     closeMemberOptionsModal();
     
     // Close mobile drawer first
     document.body.classList.remove("mobile-drawer-open");
     
-    // Ensure ID is a number or string as expected by the transform function
-    const memberId = selectedMember.id;
-    
-    // Switch to their tree view
-    switchToIndividualFamilyView(currentView, memberId);
+    // Switch to their tree view - Force them to be the root
+    console.log("Re-rooting tree on:", memberId);
+    switchToIndividualFamilyView(currentView, memberId, true);
   }
 });
 
@@ -2013,13 +2080,13 @@ function initVerticalTreeV2() {
   const getY = (d) => d.x;
 
   const colorScale = d3.scaleOrdinal([
-    "#FF0055", // Neon Red
-    "#FFD700", // Gold
-    "#32FF32", // Neon Lime
-    "#FF6600", // Neon Orange
-    "#D500F9", // Neon Purple
-    "#00E5FF", // Neon Cyan (High Contrast)
-    "#FF3D00", // Deep Orange
+    "#6d4aff", // Kintree Purple
+    "#51d1e3", // Cyan
+    "#f5a3c7", // Pink
+    "#a6f6af", // Vivid Green
+    "#ffd1a4", // Sand
+    "#b5e2ff", // Light Blue
+    "#dff2cd", // Light Green
   ]);
 
   // REPLACING LINK LOGIC START
@@ -2193,7 +2260,6 @@ function initVerticalTreeV2() {
       .attr("y", -20)
       .attr("width", 40)
       .attr("height", 40)
-      .attr("crossorigin", "anonymous")
       .attr("clip-path", `url(#${clipId})`)
       .attr("preserveAspectRatio", "xMidYMid slice");
 
@@ -2313,8 +2379,8 @@ window.reRootTree = function (targetId) {
 
   console.log("Re-rooting tree on:", targetId);
 
-  // Transform data focusing on targetId
-  familyData = transformFamilyData(rawFamilyData, targetId);
+  // Transform data focusing on targetId - Force them to be the root
+  familyData = transformFamilyData(rawFamilyData, targetId, true);
 
   if (!familyData) {
     console.error("Failed to re-transform data");
@@ -2324,6 +2390,8 @@ window.reRootTree = function (targetId) {
   // Re-render current view (Vertical Tree usually)
   if (currentView === "vertical-tree") {
     initVerticalTreeV2();
+  } else if (currentView === "fan") {
+    initFan(String(targetId));
   } else {
     initApp();
   }
@@ -2387,21 +2455,41 @@ d3.json("data.json")
   .catch((error) => {
     console.error("Error loading data.json:", error);
 
-    // Show Error on Screen
-    d3
-      .select("body")
-      .append("div")
-      .style("position", "fixed")
-      .style("top", "50%")
-      .style("left", "50%")
-      .style("transform", "translate(-50%, -50%)")
-      .style("background", "rgba(50, 0, 0, 0.9)")
-      .style("color", "white")
-      .style("padding", "30px")
-      .style("border", "2px solid red")
-      .style("border-radius", "10px")
-      .style("text-align", "center")
-      .style("z-index", "9999").html(`
+    // --- FALLBACK TO STATIC DATA (Local File Support) ---
+    if (typeof staticFamilyData !== "undefined") {
+      console.log("Using static data fallback from data.js");
+      rawFamilyData = staticFamilyData.data || staticFamilyData;
+      familyData = transformFamilyData(staticFamilyData);
+
+      if (familyData) {
+        populateMemberList();
+        initApp();
+
+        // Show Fallback Success Toast
+        const toast = d3
+          .select("body")
+          .append("div")
+          .style("position", "fixed")
+          .style("bottom", "20px")
+          .style("left", "20px")
+          .style("background", "rgba(50, 50, 0, 0.9)")
+          .style("color", "#FFD700")
+          .style("padding", "15px 25px")
+          .style("border", "1px solid #FFD700")
+          .style("border-radius", "5px")
+          .style("font-family", "sans-serif")
+          .style("z-index", "10000")
+          .html("<strong>Dataset Loaded:</strong> data.js (Local Fallback)");
+
+        setTimeout(() => {
+          toast.transition().duration(1000).style("opacity", 0).remove();
+        }, 3000);
+        return; // Success, skip error message
+      }
+    }
+
+    // Show Error on Screen if no fallback available
+    d3.select("body").append("div").style("position", "fixed").style("top", "50%").style("left", "50%").style("transform", "translate(-50%, -50%)").style("background", "rgba(50, 0, 0, 0.9)").style("color", "white").style("padding", "30px").style("border", "2px solid red").style("border-radius", "10px").style("text-align", "center").style("z-index", "9999").html(`
             <h2>Data Loading Failed</h2>
             <p>Could not load <code>data.json</code>. This is likely due to browser security restrictions (CORS) when opening files directly.</p>
             <hr style="border-color: #555;">
@@ -2420,6 +2508,7 @@ d3.json("data.json")
 // ─────────────────────────────────────
 
 document.getElementById("my-family")?.addEventListener("click", () => {
+  currentFanRootId = null; // Reset focal ID to default (Myself)
   familyData = transformFamilyData(rawFamilyData);
   switchView(currentView); // re-render current view
 });
@@ -2431,6 +2520,7 @@ document.getElementById("maternal-family")?.addEventListener("click", () => {
     return;
   }
 
+  currentFanRootId = String(me.mid); // Update focal ID
   familyData = transformFamilyData(rawFamilyData, me.mid);
   switchView(currentView);
 });
@@ -2442,11 +2532,12 @@ document.getElementById("wife-family")?.addEventListener("click", () => {
     return;
   }
 
+  currentFanRootId = String(me.pids[0]); // Update focal ID
   familyData = transformFamilyData(rawFamilyData, me.pids[0]);
   switchView(currentView);
 });
 
-const switchToIndividualFamilyView = (targetView, targetId = null) => {
+const switchToIndividualFamilyView = (targetView, targetId = null, rootAtFocus = false) => {
   // New Feature: Restricted Individual Family View
   // Centers on Target + Parents + Siblings + Wife + Kids
 
@@ -2466,30 +2557,41 @@ const switchToIndividualFamilyView = (targetView, targetId = null) => {
     return;
   }
 
-  // 2. Transform Data to Individual Family
-  // First transform to individual family view
-  const newData = transformToIndividualFamily(rawFamilyData, targetNode.id);
-
-  if (!newData) {
-    console.error("Failed to generate Individual Family view for ID:", targetNode.id);
-    alert("Failed to generate Individual Family view.");
+  // 2. Transform Data
+  // If targetId is provided and we want to root at focus, use the full raw background data
+  // but specify the focus and rootAtFocus flag.
+  // Otherwise, use the filtered "Individual Family" view.
+  
+  if (targetId && rootAtFocus) {
+    // Re-root without strict filtering
+    familyData = transformFamilyData(rawFamilyData, targetId, true);
+  } else {
+    // Individual Family Filter (Parents + Siblings + Spouse + Kids)
+    const newData = transformToIndividualFamily(rawFamilyData, targetNode.id);
+    if (!newData) {
+      console.error("Failed to generate Individual Family view for ID:", targetNode.id);
+      alert("Failed to generate Individual Family view.");
+      return;
+    }
+    // Note: We intentionally DO NOT overwrite the global rawFamilyData here 
+    // to preserve the full graph for views that need it (like Fan View).
+    familyData = transformFamilyData(newData);
+  }
+  
+  if (!familyData) {
+    console.error("Failed to generate family data structure.");
     return;
   }
 
-  // Set rawFamilyData to filtered data for views that use it (like fan)
-  rawFamilyData = newData;
-
-  // 3. Transform to hierarchy for tree visualization
-  familyData = transformFamilyData(newData);
-  
-  if (!familyData) {
-    familyData = newData;
-  }
-
   // 4. Switch to the target view with the filtered data
+  // Track this ID globally so it persists across view transitions
+  // Ensure we use the validated ID from targetNode
+  currentFanRootId = String(targetNode.id);
+
   if (targetView === "fan") {
-    initFan(String(targetId));
+    initFan(currentFanRootId);
   } else {
+    // For other views (isometric, vertical, etc.), switchView will consume currentFanRootId
     switchView(targetView);
   }
 
@@ -2956,19 +3058,26 @@ function initD3Globe_Deprecated() {
 // ─────────────────────────────────────
 
 async function exportView(format) {
-    const controls = document.getElementById('view-controls');
-    const sidebar = document.getElementById('fan-member-sidebar');
-    const toast = document.querySelector('.toast-notification');
-    const memberList = document.getElementById('member-list');
+    const uiSelectors = [
+        '.mobile-menu-btn', 
+        '.mobile-drawer-header', 
+        '.mobile-drawer-container',
+        '.control-panel', 
+        '.member-sidebar', 
+        '.toast-notification', 
+        '.member-options-modal',
+        '#mobile-drawer-overlay'
+    ];
     
-    // 1. Prepare for capture: Hide UI elements
-    const originalControlsDisplay = controls ? controls.style.display : '';
-    const originalSidebarDisplay = sidebar ? sidebar.style.display : '';
-    const originalToastDisplay = toast ? toast.style.display : '';
-
-    if (controls) controls.style.display = 'none';
-    if (sidebar) sidebar.style.display = 'none';
-    if (toast) toast.style.display = 'none';
+    const hiddenElements = [];
+    uiSelectors.forEach(selector => {
+        document.querySelectorAll(selector).forEach(el => {
+            if (el.style.display !== 'none') {
+                hiddenElements.push({ el, originalDisplay: el.style.display });
+                el.style.display = 'none';
+            }
+        });
+    });
 
     const container = document.getElementById('tree-container');
     const originalBodyOverflow = document.body.style.overflow;
@@ -2993,10 +3102,11 @@ async function exportView(format) {
     // Smooth fade in
     requestAnimationFrame(() => overlay.classList.add('active'));
 
+    let originalState = {};
+
     try {
         const svgElement = container ? container.querySelector('svg') : null;
         const globeContainer = document.getElementById('globe-container');
-        let originalState = {};
 
         // 1. Specialized Preparation for Full View
         if (currentView === 'globe' && typeof myGlobe !== 'undefined') {
@@ -3048,7 +3158,16 @@ async function exportView(format) {
             windowWidth: captureWidth,
             windowHeight: captureHeight,
             ignoreElements: (el) => {
-                return (el.id === 'download-controls' || el === procMsg || el.id === 'view-controls' || el.id === 'fan-member-sidebar');
+                // Ensure UI, processing message, and modals are not captured
+                return (
+                    el.classList.contains('control-panel') || 
+                    el.classList.contains('member-sidebar') || 
+                    el.classList.contains('mobile-menu-btn') ||
+                    el.classList.contains('export-overlay') ||
+                    el.classList.contains('member-options-modal') ||
+                    el.id === 'download-controls' || 
+                    el === overlay
+                );
             }
         });
 
@@ -3080,12 +3199,13 @@ async function exportView(format) {
         alert("An error occurred during export. Check console for details.");
     } finally {
         // 3. Restore UI first to ensure it reappears even if restoration fails
-        const overlay = document.querySelector('.export-overlay');
-        if (overlay) overlay.classList.remove('active');
+        // 3. Restore UI first to ensure it reappears even if restoration fails
+        const exportOverlay = document.querySelector('.export-overlay');
+        if (exportOverlay) exportOverlay.classList.remove('active');
         
-        if (controls) controls.style.display = originalControlsDisplay;
-        if (sidebar) sidebar.style.display = originalSidebarDisplay;
-        if (toast) toast.style.display = originalToastDisplay;
+        hiddenElements.forEach(({ el, originalDisplay }) => {
+            el.style.display = originalDisplay;
+        });
         
         document.body.style.overflow = originalBodyOverflow;
         const container = document.getElementById('tree-container');
@@ -3113,19 +3233,34 @@ async function exportView(format) {
 
 // Add event listeners for download buttons
 document.addEventListener('DOMContentLoaded', () => {
-    const jpgBtn = document.getElementById('download-jpg');
-    const pngBtn = document.getElementById('download-png');
-    const pdfBtn = document.getElementById('download-pdf');
+    // --- Unified Download Button Logic ---
+    const downloadOpenBtns = document.querySelectorAll('.download-open-btn');
+    const exportModal = document.getElementById('export-selection-modal');
+    const closeExportBtn = document.getElementById('close-export-modal');
+    const formatBtns = document.querySelectorAll('.export-format-btn');
+    
+    // Open Modal
+    downloadOpenBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (exportModal) exportModal.classList.add('active');
+        });
+    });
 
-    if (jpgBtn) {
-        jpgBtn.addEventListener('click', () => exportView('jpg'));
+    // Close Modal
+    if (closeExportBtn) {
+        closeExportBtn.addEventListener('click', () => {
+            exportModal.classList.remove('active');
+        });
     }
-    if (pngBtn) {
-        pngBtn.addEventListener('click', () => exportView('png'));
-    }
-    if (pdfBtn) {
-        pdfBtn.addEventListener('click', () => exportView('pdf'));
-    }
+
+    // Handle format selection
+    formatBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const format = btn.dataset.format;
+            exportModal.classList.remove('active'); // Hide modal immediately
+            exportView(format);                     // Start export
+        });
+    });
 
     // --- Theme Toggle Logic ---
     window.isDarkMode = localStorage.getItem("familyTreeTheme") !== "light";
@@ -3136,19 +3271,22 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             document.body.classList.add("light-mode");
         }
-        const themeIcon = document.querySelector("#theme-toggle i");
-        if (themeIcon) {
-            themeIcon.className = window.isDarkMode ? "fa-solid fa-sun" : "fa-solid fa-moon";
-            const themeBtn = document.getElementById("theme-toggle");
-            if (themeBtn) themeBtn.title = window.isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode";
-        }
+        
+        // Update all theme icons
+        document.querySelectorAll(".theme-toggle").forEach(btn => {
+            const icon = btn.querySelector("i");
+            if (icon) {
+                icon.className = window.isDarkMode ? "fa-solid fa-sun" : "fa-solid fa-moon";
+            }
+            btn.title = window.isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode";
+        });
     };
 
     applyTheme();
 
-    const themeBtn = document.getElementById('theme-toggle');
-    if (themeBtn) {
-        themeBtn.addEventListener('click', () => {
+    // Attach listener to all theme toggle buttons
+    document.querySelectorAll('.theme-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
             window.isDarkMode = !window.isDarkMode;
             localStorage.setItem("familyTreeTheme", window.isDarkMode ? "dark" : "light");
             applyTheme();
@@ -3160,5 +3298,5 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-    }
+    });
 });
