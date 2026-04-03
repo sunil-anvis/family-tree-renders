@@ -299,19 +299,11 @@ function transformToIndividualFamily(apiResponse, focusId = null) {
                             newChild.children.push(clone(grandChild));
                         });
                     }
+                    newRoot.children.push(newChild);
                 } else {
                     // It's a Sibling
-                    // "Thats it" -> No children for siblings.
-                    // Also maybe no spouse? User said "siblings, wife and kids". Wife of Root (Me). 
-                    // So we probably strip spouse from siblings to be strict?
-                    // "siblings" usually implies just the person.
-                    // Let's keep it simple: Delete spouse from sibling clone if we want to be strict.
-                    // Use 'delete newChild.spouse' if needed. 
-                    // For now, I'll leave spouse if it exists, as it explains the sibling better, 
-                    // but definitely NO children.
+                    // Excluded per request: only keep father, mother, spouse, and kids.
                 }
-
-                newRoot.children.push(newChild);
             });
         }
     } else {

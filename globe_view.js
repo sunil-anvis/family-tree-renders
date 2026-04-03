@@ -34,7 +34,9 @@ function initThreeGlobe() {
         }
 
         try {
-            myGlobe = Globe()
+            myGlobe = Globe({ 
+                rendererConfig: { preserveDrawingBuffer: true } 
+            })
                 (globeContainer)
                 .globeImageUrl('//unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
                 .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
@@ -65,8 +67,8 @@ function initThreeGlobe() {
                     const size = d.isMe ? '22px' : '12px';
                     el.style.width = size;
                     el.style.height = size;
-                    el.style.background = '#fff';
-                    el.style.border = d.isMe ? '2px solid #FFD700' : '1px solid #ff0055';
+                    el.style.background = (typeof window.isDarkMode !== "undefined" && !window.isDarkMode) ? '#fff' : '#111';
+                    el.style.border = d.isMe ? `3px solid ${d.color}` : `2px solid ${d.color}`;
                     el.style.borderRadius = '50% 50% 50% 0';
                     el.style.transform = 'rotate(-45deg)';
                     el.style.display = 'flex';
@@ -78,6 +80,7 @@ function initThreeGlobe() {
                     el.style.overflow = 'hidden'; // Clip image to pin shape
 
                     const img = document.createElement('img');
+                    img.crossOrigin = "anonymous";
                     const photoUrl = d.originalData.photo || '//unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
                     img.src = photoUrl;
                     img.onerror = () => { img.src = 'https://api.kintree.com/kintree-assets/images/default-avatars/male.png'; };
@@ -181,6 +184,11 @@ function processFamilyDataForGlobe() {
         const points = [];
         const JITTER_AMOUNT = 0.5; // Degrees spread
 
+        const lightColors = ["#BDD7EF", "#FFACFC", "#FEF28D", "#A8F48D", "#FE96FA"];
+        const darkColors = ["#00f2ea", "#ff0055", "#4ecca3", "#FFD700", "#b366ff"];
+        const genColors = (typeof window.isDarkMode !== "undefined" && !window.isDarkMode) ? lightColors : darkColors;
+        const getGlobeColor = (depth) => genColors[depth % genColors.length];
+
         locMap.forEach((group, key) => {
             const [baseLat, baseLng] = key.split(',').map(Number);
 
@@ -189,7 +197,7 @@ function processFamilyDataForGlobe() {
                 points.push({
                     lat: baseLat,
                     lng: baseLng,
-                    color: group[0].data.isMe ? '#FFD700' : '#FF0055',
+                    color: getGlobeColor(group[0].depth),
                     isMe: group[0].data.isMe, // Pass isMe for styling
                     name: group[0].data.name,
                     originalData: group[0].data
@@ -206,7 +214,7 @@ function processFamilyDataForGlobe() {
                     points.push({
                         lat: baseLat + latOffset,
                         lng: baseLng + lngOffset,
-                        color: d.data.isMe ? '#FFD700' : '#FF0055',
+                        color: getGlobeColor(d.depth),
                         isMe: d.data.isMe,
                         name: d.data.name,
                         originalData: d.data

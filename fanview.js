@@ -4,8 +4,9 @@ function initFan(startNodeId = null) {
     svg.on(".drag", null);
     svg.on(".zoom", null);
 
-    // 3. Set Background for Fan View (Black)
-    svg.style("background", "black");
+    // 3. Set Background for Fan View based on Theme
+    const bgColor = (typeof window.isDarkMode !== "undefined" && !window.isDarkMode) ? "white" : "black";
+    svg.style("background", bgColor);
 
     const radius = Math.min(width, height) * 0.65;
 
@@ -181,12 +182,11 @@ function initFan(startNodeId = null) {
 
     // Color Palette
     const genColors = [
-        "#90caf9", // Blue (Me)
-        "#f48fb1", // Pink
-        "#fff59d", // Yellow
-        "#a5d6a7", // Green
-        "#ce93d8", // Purple
-        "#ffcc80", // Orange
+        "#BDD7EF", // Blue (Me)
+        "#FFACFC",
+        "#FEF28D",
+        "#A8F48D",
+        "#FE96FA",
     ];
     const getGenColor = (d) => genColors[d.depth % genColors.length];
 
