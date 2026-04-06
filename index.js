@@ -40,19 +40,7 @@ window.addEventListener("resize", () => {
   }
 });
 
-// Globe State
-let globeData = {};
-let projection,
-  path,
-  globeGroup,
-  landGroup,
-  stateGroup,
-  riverGroup,
-  cityGroup,
-  linkGroup,
-  nodeGroup,
-  dragBehavior,
-  zoomBehavior;
+
 
 // Main SVG Container
 const svg = d3
@@ -100,8 +88,6 @@ modal.on("click", (e) => {
 });
 
 function showModal(d) {
-  const isVerticalView = currentView === "vertical-tree";
-
   modalBody.html(`
     <div class="modal-profile">
         <img src="${d.data.photo}" alt="${d.data.name}" class="modal-image">
@@ -118,16 +104,6 @@ function showModal(d) {
                 <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10zm0-7a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>
                 ${d.data.location || "Location Unknown"}
             </p>
-
-            ${
-              isVerticalView
-                ? `
-                <div class="modal-actions" style="margin-top:15px; display:flex; gap:10px; flex-wrap:wrap;">
-                    <button class="trace-btn" id="trace-path-btn" style="flex:1;">Trace Path from Me</button>
-                </div>
-            `
-                : ""
-            }
         </div>
     </div>
 `);
@@ -136,132 +112,6 @@ function showModal(d) {
     .transition()
     .duration(200)
     .style("opacity", 1);
-
-  // Trace Button Handler (only in vertical view)
-  if (isVerticalView) {
-    const traceBtn = document.getElementById("trace-path-btn");
-    if (traceBtn) {
-      traceBtn.addEventListener("click", () => {
-        console.log("Trace button clicked!");
-        console.log("currentTreeRoot:", currentTreeRoot);
-        console.log("Target node data:", d.data);
-
-        if (!currentTreeRoot) {
-          console.error("currentTreeRoot is not set!");
-          return;
-        }
-
-        // 1. Clear previous trace
-        d3.selectAll(".trace-active").classed("trace-active", false);
-
-        // 2. Find "Me" node
-        const meNode = currentTreeRoot.descendants().find((n) => n.data.isMe);
-        console.log("Me node:", meNode);
-
-        // 3. Find path to current node (d)
-        const targetNode = currentTreeRoot
-          .descendants()
-          .find((n) => n.data.id === d.data.id);
-        console.log("Target node:", targetNode);
-
-        if (!meNode) {
-          console.error("Could not find 'Me' node in tree!");
-          alert("Could not find 'Myself' in this tree view to trace from.");
-          return;
-        }
-
-        if (!targetNode) {
-          console.error("Could not find target node in tree!");
-          return;
-        }
-
-        if (meNode === targetNode) {
-          console.log("Target is 'Me' - no path to trace");
-          return;
-        }
-
-        // Calculate Path (Ancestry path in the *visual* tree)
-        const pathNodes = meNode.path(targetNode);
-        console.log(
-          "Path nodes:",
-          pathNodes.map((n) => n.data.name),
-        );
-
-        // Highlight Nodes
-        const nodeIds = new Set(pathNodes.map((n) => n.data.id));
-        d3.selectAll(".tree-node")
-          .filter((n) => nodeIds.has(n.data.id))
-          .classed("trace-active", true);
-
-        // Highlight Links
-        const linkPairs = new Set();
-        for (let i = 0; i < pathNodes.length - 1; i++) {
-          const a = pathNodes[i];
-          const b = pathNodes[i + 1];
-          linkPairs.add(`${a.data.id}-${b.data.id}`);
-          linkPairs.add(`${b.data.id}-${a.data.id}`);
-        }
-
-        console.log("Link pairs:", Array.from(linkPairs));
-
-        // Close modal first
-        modal
-          .transition()
-          .duration(200)
-          .style("opacity", 0)
-          .on("end", () => modal.style("pointer-events", "none"));
-
-        // Animate the trace sequentially
-        // Highlight nodes one by one with delay
-        pathNodes.forEach((node, index) => {
-          setTimeout(() => {
-            d3.selectAll(".tree-node")
-              .filter((n) => n.data.id === node.data.id)
-              .classed("trace-active", true)
-              .select("circle")
-              .transition()
-              .duration(300)
-              .attr("r", 25) // Pulse effect
-              .transition()
-              .duration(300)
-              .attr("r", 21);
-          }, index * 400); // 400ms delay between each node
-        });
-
-        // Animate links one by one
-        for (let i = 0; i < pathNodes.length - 1; i++) {
-          const a = pathNodes[i];
-          const b = pathNodes[i + 1];
-          const linkKey = `${a.data.id}-${b.data.id}`;
-
-          setTimeout(
-            () => {
-              d3.selectAll(".tree-link[data-link-type='main-tree']")
-                .filter(function (l) {
-                  return linkPairs.has(
-                    `${l.source.data.id}-${l.target.data.id}`,
-                  );
-                })
-                .filter(function (l) {
-                  return (
-                    `${l.source.data.id}-${l.target.data.id}` === linkKey ||
-                    `${l.target.data.id}-${l.source.data.id}` === linkKey
-                  );
-                })
-                .classed("trace-active", true)
-                .transition()
-                .duration(400)
-                .attr("stroke-width", 6)
-                .transition()
-                .duration(200)
-                .attr("stroke-width", 4);
-            },
-            i * 400 + 200,
-          ); // Start after the source node, offset by 200ms
-        }
-      });
-    }
-  }
 }
 
 // Global variable to store current hierarchy root for tracing
@@ -269,304 +119,12 @@ let currentTreeRoot = null;
 
 // State
 
-let currentView = "vertical-tree"; // 'tree' or 'vertical-tree'
+let currentView = "fan"; // 'fan', 'isometric' or 'pedigree'
 let ancestorMode = false;
 let fanHistory = []; // Stack for Fan View navigation history
 let currentFanRootId = null; // Track current root ID for Fan View
 
-// --- 3. Tree Logic ---
-function initTree() {
-  svg.selectAll("*").remove(); // Clear SVG
-  svg.on(".drag", null); // Clear drag
-  svg.on(".zoom", null); // Clear zoom
 
-  // 2. Set Background for Tree View (Multicolor Gradient)
-  svg.style("background", "linear-gradient(45deg, #1a2980 0%, #26d0ce 100%)");
-
-  const cardWidth = 180;
-  const cardHeight = 60;
-
-  // Tree Layout
-  // Create a group for the tree to support Zoom/Pan
-  const g = svg.append("g").attr("transform", `translate(${width / 2}, 50)`);
-
-  // --- SVG DEFINITIONS (Gradients/Filters) ---
-  const defs = svg.append("defs");
-
-  // Card Gradient (Neon Dark)
-  const cardGradient = defs
-    .append("linearGradient")
-    .attr("id", "card-gradient")
-    .attr("x1", "0%")
-    .attr("y1", "0%")
-    .attr("x2", "100%")
-    .attr("y2", "100%");
-
-  cardGradient
-    .append("stop")
-    .attr("offset", "0%")
-    .attr("stop-color", "#1a1a2e"); // Dark Blue
-
-  cardGradient
-    .append("stop")
-    .attr("offset", "100%")
-    .attr("stop-color", "#16213e"); // Slightly lighter
-
-  // Glow Filter
-  const filter = defs
-    .append("filter")
-    .attr("id", "neon-glow")
-    .attr("x", "-50%")
-    .attr("y", "-50%")
-    .attr("width", "200%")
-    .attr("height", "200%");
-
-  filter
-    .append("feGaussianBlur")
-    .attr("stdDeviation", "2.5")
-    .attr("result", "coloredBlur");
-
-  const feMerge = filter.append("feMerge");
-  feMerge.append("feMergeNode").attr("in", "coloredBlur");
-  feMerge.append("feMergeNode").attr("in", "SourceGraphic");
-
-  const root = d3.hierarchy(familyData);
-
-  // Increase size for cards
-  // Adjust node size to account for potential spouses (Double Width)
-  const treeLayout = d3
-    .tree()
-    .nodeSize([cardWidth * 2 + 50, cardHeight + 40]) // Width (increased), Height spacing
-    .separation((a, b) => (a.parent == b.parent ? 1.1 : 1.25));
-
-  treeLayout(root);
-
-  // Links
-  g.selectAll(".tree-link")
-    .data(root.links())
-    .enter()
-    .append("path")
-    .attr("class", "tree-link")
-    .attr("d", (d) => {
-      let s = { x: d.source.x, y: d.source.y + cardHeight / 2 };
-      let t = { x: d.target.x, y: d.target.y - cardHeight / 2 };
-
-      // --- Source Handling ---
-      if (d.source.data.spouse) {
-        // Square Bracket Style (Top-Down)
-        // Father (Left) + Mother (Right) -> Horizontal Bar -> Vertical Down
-
-        const fatherX = s.x;
-        const motherX = s.x + (cardWidth + 20); // Spouse offset
-
-        // Horizontal Bar Y Position (Below cards)
-        const bracketY = s.y + 20;
-
-        // 1. Vertical Connectors from Parents to Horizontal Bar
-        const fatherLine = `M ${fatherX},${s.y} L ${fatherX},${bracketY} `;
-        const motherLine = `M ${motherX},${s.y} L ${motherX},${bracketY} `;
-
-        // 2. Horizontal Bracket Line
-        const horizontalLine = `M ${fatherX},${bracketY} L ${motherX},${bracketY} `;
-
-        // 3. Child Connector (From Bracket Midpoint Down)
-        const bracketMidX = (fatherX + motherX) / 2;
-
-        // Target is usually single node (center)
-        // If Target has spouse, we need target bracket logic
-        let targetX = t.x;
-        if (d.target.data.spouse) {
-          // If target is a couple, point to center of couple
-          targetX = t.x + (cardWidth + 20) / 2;
-        }
-
-        const midY = (bracketY + t.y) / 2;
-
-        // Path: MidBracket -> MidPoint -> Target
-        // Simple Orthogonal: V midY H t.x V t.y
-        const mainPath = `M ${bracketMidX},${bracketY} V ${midY} H ${targetX} V ${t.y} `;
-
-        // Check if Target needs Bracket (Child -> Parents)
-        if (d.target.data.spouse) {
-          // Target Bracket Logic (Join Upwards)
-          const tFatherX = t.x;
-          const tMotherX = t.x + (cardWidth + 20);
-          const tBracketY = t.y - 20;
-
-          // Lines from Bracket to Target Parents
-          const tFatherLine = `M ${tFatherX},${tBracketY} L ${tFatherX},${t.y} `;
-          const tMotherLine = `M ${tMotherX},${tBracketY} L ${tMotherX},${t.y} `;
-          const tHorizLine = `M ${tFatherX},${tBracketY} L ${tMotherX},${tBracketY} `;
-
-          // Connect Main Path to Target Bracket Center
-          const tBracketMidX = (tFatherX + tMotherX) / 2;
-
-          // Recalculate Main Path to hit tBracketMidX/tBracketY
-          const fixedMainPath = `M ${bracketMidX},${bracketY} V ${midY} H ${tBracketMidX} V ${tBracketY} `;
-
-          return (
-            fatherLine +
-            motherLine +
-            horizontalLine +
-            fixedMainPath +
-            tFatherLine +
-            tMotherLine +
-            tHorizLine
-          );
-        }
-
-        return fatherLine + motherLine + horizontalLine + mainPath;
-      }
-
-      // Single Source
-      else {
-        // If Target has spouse, point to center of couple
-        let targetX = t.x;
-        let targetY = t.y;
-
-        if (d.target.data.spouse) {
-          // Target Bracket Logic (Join Upwards)
-          const tFatherX = t.x;
-          const tMotherX = t.x + (cardWidth + 20);
-          const tBracketY = t.y - 20;
-
-          const tFatherLine = `M ${tFatherX},${tBracketY} L ${tFatherX},${t.y} `;
-          const tMotherLine = `M ${tMotherX},${tBracketY} L ${tMotherX},${t.y} `;
-          const tHorizLine = `M ${tFatherX},${tBracketY} L ${tMotherX},${tBracketY} `;
-
-          const tBracketMidX = (tFatherX + tMotherX) / 2;
-
-          const midY = (s.y + tBracketY) / 2;
-          const mainPath = `M ${s.x},${s.y} V ${midY} H ${tBracketMidX} V ${tBracketY} `;
-
-          return mainPath + tFatherLine + tMotherLine + tHorizLine;
-        }
-
-        const midY = (s.y + t.y) / 2;
-        return `M ${s.x},${s.y} V ${midY} H ${t.x} V ${t.y} `;
-      }
-    })
-    .attr("fill", "none")
-    .attr("stroke", "#4ecca3")
-    .attr("stroke-width", 1.5)
-    .attr("opacity", 0.6);
-
-  // Nodes (Cards)
-  const nodes = g
-    .selectAll(".tree-node")
-    .data(root.descendants())
-    .enter()
-    .append("g")
-    .attr("class", "tree-node")
-    .attr("transform", (d) => `translate(${d.x}, ${d.y})`)
-    .style("cursor", "pointer")
-    .on("click", (event, d) => {
-      event.stopPropagation();
-      showModal(d);
-    });
-
-  // Render Card (Reusable function?)
-  const renderCard = (selection, data, isSpouse = false) => {
-    const truncate = (str, n) =>
-      str && str.length > n ? str.slice(0, n - 3) + "..." : str;
-    const xOffset = isSpouse ? cardWidth + 20 : 0;
-
-    const grp = selection
-      .append("g")
-      .attr("transform", `translate(${xOffset}, 0)`);
-
-    // Card Background
-    if (familyData.node_style !== "circle") {
-      grp
-        .append("rect")
-        .attr("x", -cardWidth / 2)
-        .attr("y", -cardHeight / 2)
-        .attr("width", cardWidth)
-        .attr("height", cardHeight)
-        .attr("rx", 10)
-        .attr("class", "tree-card-bg");
-    }
-
-    // Clip Path
-    const clipId = `clip-${data.id}`;
-    grp
-      .append("clipPath")
-      .attr("id", clipId)
-      .append("circle")
-      .attr("r", 20)
-      .attr("cx", -cardWidth / 2 + 30)
-      .attr("cy", 0);
-
-    // Image
-    grp
-      .append("image")
-      .attr("xlink:href", data.photo)
-      .attr("x", -cardWidth / 2 + 10)
-      .attr("y", -20)
-      .attr("width", 40)
-      .attr("height", 40)
-      .attr("clip-path", `url(#${clipId})`)
-      .attr("preserveAspectRatio", "xMidYMid slice");
-
-    // Ring
-    grp
-      .append("circle")
-      .attr("r", 21)
-      .attr("cx", -cardWidth / 2 + 30)
-      .attr("cy", 0)
-      .attr("fill", "none")
-      .attr("stroke", data.isMe ? "#FFD700" : "#4ecca3")
-      .attr("stroke-width", data.isMe ? 4 : 1.5);
-    // Text Group
-    const textGroup = grp
-      .append("g")
-      .attr("transform", `translate(${-cardWidth / 2 + 60}, 0)`);
-
-    textGroup
-      .append("text")
-      .attr("class", "tree-card-name")
-      .attr("y", -2)
-      .text(truncate(data.name, 15))
-      .append("title") // Tooltip
-      .text(data.name);
-
-    textGroup
-      .append("text")
-      .attr("class", "tree-card-relation")
-      .attr("y", 12)
-      .text(truncate(data.relation || "", 20))
-      .append("title") // Tooltip for relation
-      .text(data.relation || "");
-
-    // If it's a spouse, maybe link graphically with a line?
-    // (handled by placement)
-  };
-
-  nodes.each(function (d) {
-    const el = d3.select(this);
-    // Render Main Node
-    renderCard(el, d.data, false);
-
-    // Render Spouse if exists
-    if (d.data.spouse) {
-      // Spouse exists: Render Spouse Card
-      // Connector line removed (handled by bracket links or proximity)
-      renderCard(el, d.data.spouse, true);
-    }
-  });
-
-  // Zoom for Tree
-  const zoom = d3
-    .zoom()
-    .scaleExtent([0.1, 5])
-    .on("zoom", (event) => {
-      g.attr("transform", event.transform);
-    });
-
-  // Center the tree initially
-  const initialTransform = d3.zoomIdentity.translate(width / 2, 50).scale(1);
-  svg.call(zoom).call(zoom.transform, initialTransform);
-}
 
 // --- 4. Fan Chart Logic ---
 function initFan(startNodeId = null) {
@@ -1768,15 +1326,6 @@ function switchView(view) {
   // 4. View Initialization
   if (view === "fan") {
     initFan();
-  } else if (view === "tree") {
-    initTree();
-  } else if (view === "vertical-tree") {
-    // Apply focal filter if we have re-rooted via list
-    if (typeof currentFanRootId !== "undefined" && currentFanRootId) {
-      console.log(`[SwitchView] Rooting Vertical Tree on: ${currentFanRootId}`);
-      familyData = transformFamilyData(rawFamilyData, currentFanRootId, true);
-    }
-    initVerticalTreeV2();
   } else if (view === "isometric") {
     // Filter 3D view to only show Root, Parents, Siblings, and Children
     const focusId =
@@ -1795,20 +1344,6 @@ function switchView(view) {
       familyData = transformFamilyData(rawFamilyData, currentFanRootId, true);
     }
     initPedigreeView();
-  } else if (view === "true-3d") {
-    // [NEW] True 3D View
-    if (typeof initTrue3D === "function") {
-      initTrue3D();
-    }
-  } else if (view === "globe") {
-    // Hide SVG for Globe
-    if (svgEl) svgEl.style.display = "none";
-
-    if (typeof initThreeGlobe === "function") {
-      initThreeGlobe();
-    } else {
-      console.error("Three.js Globe not found");
-    }
   }
 }
 
@@ -2033,8 +1568,6 @@ const switchToMyFamilyView = () => {
   document.getElementById("my-family")?.classList.add("active");
   if (currentView === "fan") {
     initFan();
-  } else if (currentView === "vertical-tree") {
-    initVerticalTreeV2();
   } else {
     switchView(currentView);
   }
@@ -2047,8 +1580,6 @@ const switchToMaternalView = () => {
   document.getElementById("maternal-family")?.classList.add("active");
   if (currentView === "fan") {
     initFan();
-  } else if (currentView === "vertical-tree") {
-    initVerticalTreeV2();
   } else {
     switchView(currentView);
   }
@@ -2061,8 +1592,6 @@ const switchToWifeView = () => {
   document.getElementById("wife-family")?.classList.add("active");
   if (currentView === "fan") {
     initFan();
-  } else if (currentView === "vertical-tree") {
-    initVerticalTreeV2();
   } else {
     switchView(currentView);
   }
@@ -2140,387 +1669,19 @@ window.addEventListener("resize", () => {
   height = window.innerHeight;
   svg.attr("width", width).attr("height", height);
 
-  if (currentView === "tree") {
-    initTree();
-  } else if (currentView === "vertical-tree") {
-    initVerticalTreeV2();
-  } else if (currentView === "fan") {
+  if (currentView === "fan") {
     initFan();
   } else if (currentView === "pedigree") {
     initPedigreeView();
   } else if (currentView === "isometric") {
     init3DTree();
-  } else if (currentView === "true-3d") {
-    // Handled internally by try-3d-view.js listener, but we can force update if needed
-    // initTrue3D(); // Not needed if we use separate resize listener
-  } else if (currentView === "globe") {
-    // initGlobe(); // D3 one de-activated
-    // Resize handled by window listener in globe_view.js
   }
 });
 
 // Initial Load
 // Initial Load removed, handled by initApp after data load
 
-// --- 7. Vertical Tree V2 (Bracket Connections) ---
-function initVerticalTreeV2() {
-  svg.selectAll("*").remove(); // Clear SVG
-  svg.on(".drag", null); // Clear drag
-  svg.on(".zoom", null); // Clear zoom
-
-  // Background for Vertical Tree View
-  svg.style("background", "linear-gradient(45deg, #1a2980 0%, #26d0ce 100%)");
-
-  const cardWidth = 180;
-  const cardHeight = 60;
-
-  // Tree Layout Group
-  // Translate slightly right to give space for root
-  const g = svg.append("g").attr("transform", `translate(100, ${height / 2})`);
-
-  // --- Data Transformation for Vertical Tree ---
-  // The familyData is already transformed by transformFamilyData to be a proper hierarchy.
-
-  let vTreeRootData = familyData;
-
-  const root = d3.hierarchy(vTreeRootData);
-  currentTreeRoot = root; // Store for tracing
-
-  // Calculate Max Depth to Invert Layout
-  const maxDepth = d3.max(root.descendants(), (d) => d.depth);
-  const depthStep = cardWidth + 100; // REDUCED Spacing (was 200)
-  const totalWidth = maxDepth * depthStep;
-
-  const treeLayout = d3
-    .tree()
-    .nodeSize([1, depthStep]) // Unit spacing for custom separation
-    .separation((a, b) => {
-      // "First Generation" (Depth 1 - Children of Root) specific spacing
-      const isGen1 = a.depth === 1 && b.depth === 1;
-
-      let sep = isGen1 ? 65 : 80; // Reduced base Spacing (was 80/110)
-
-      const addSpacing = (d) => {
-        let s = 0;
-        // Spouse spacing
-        if (d.data.spouse) s += isGen1 ? 65 : 80; // Reduced (was 80/100)
-        if (
-          d.data.spouse &&
-          d.data.spouse.parents &&
-          d.data.spouse.parents.length > 0
-        )
-          s += 40; // Reduced (was 60)
-        return s;
-      };
-
-      sep += addSpacing(a);
-      sep += addSpacing(b);
-
-      // Extra gap between different branches (cousins/uncles)
-      if (a.parent !== b.parent) sep += 20; // Reduced (was 40)
-
-      return sep;
-    });
-
-  treeLayout(root);
-
-  // INVERT FUNC: Flip X coordinates
-  // Standard: Left (0) -> Right (Width)
-  const getX = (d) => d.y;
-  const getY = (d) => d.x;
-
-  const colorScale = d3.scaleOrdinal([
-    "#6d4aff", // Kintree Purple
-    "#51d1e3", // Cyan
-    "#f5a3c7", // Pink
-    "#a6f6af", // Vivid Green
-    "#ffd1a4", // Sand
-    "#b5e2ff", // Light Blue
-    "#dff2cd", // Light Green
-  ]);
-
-  // REPLACING LINK LOGIC START
-  const linkSel = g
-    .selectAll(".tree-link")
-    .data(root.links())
-    .enter()
-    .append("path")
-    .attr("class", "tree-link")
-    .attr("data-link-type", "main-tree") // Mark as main tree link for trace feature
-    .attr("d", (d) => {
-      // Visual Data Logic:
-      // Standard Flow: Source (Left) -> Target (Right)
-      const s = { x: getX(d.source) + cardWidth / 2, y: getY(d.source) };
-      const t = { x: getX(d.target) - cardWidth / 2, y: getY(d.target) };
-
-      const visualSourceData = d.source.data;
-      const visualTargetData = d.target.data;
-
-      // --- Source Handling (Ancestor/Parent) ---
-      if (visualSourceData.spouse) {
-        // Ancestor has Spouse: Center-Gap Fork Logic
-        const centerX = s.x - cardWidth / 2; // Center of Ancestor group
-
-        // Father Bottom Y
-        const fatherBottomY = s.y + cardHeight / 2;
-        // Mother Top Y
-        const spouseY = s.y + (cardHeight + 20);
-        const motherTopY = spouseY - cardHeight / 2;
-
-        // 1. Vertical Link between Spouses (Center Gap)
-        const verticalLine = `M ${centerX},${fatherBottomY} V ${motherTopY} `;
-
-        // 2. Connector from Middle of Vertical Link
-        const midY = (s.y + spouseY) / 2;
-
-        // Orthogonal Step (Rightwards to t.x)
-        let mainPath = "";
-        const dy = t.y - midY;
-        let midX = (centerX + t.x) / 2;
-
-        const rightEdge = centerX + cardWidth / 2;
-        if (midX < rightEdge + 20) {
-          midX = rightEdge + 50;
-        }
-
-        if (Math.abs(dy) < 1) {
-          mainPath = `M ${centerX},${midY} L ${t.x},${t.y} `;
-        } else {
-          mainPath = `M ${centerX},${midY} H ${midX} V ${t.y} H ${t.x} `;
-        }
-
-        return verticalLine + mainPath;
-      }
-
-      // --- Target Handling (Descendant/Child) ---
-      // If Descendant has Spouse => Square Bracket Style (Left facing bracket)
-      if (visualTargetData.spouse) {
-        const spouseY = t.y + (cardHeight + 20);
-        const midY = (s.y + t.y) / 2;
-
-        const bracketX = t.x - 20; // 20px Left of Descendant
-
-        // 1. Horizontal Connectors from Bracket to Pair
-        const fatherLine = `M ${bracketX},${t.y} L ${t.x},${t.y} `;
-        const motherLine = `M ${bracketX},${spouseY} L ${t.x},${spouseY} `;
-
-        // 2. Vertical Bracket Line
-        const verticalLine = `M ${bracketX},${t.y} L ${bracketX},${spouseY} `;
-
-        // 3. Source Connector (Source -> Bracket Midpoint)
-        const targetMidY = (t.y + spouseY) / 2;
-
-        let midX = (s.x + bracketX) / 2;
-        const minGap = 50;
-
-        if (bracketX - s.x > minGap * 2 && midX - s.x < minGap) {
-          midX = s.x + minGap;
-        }
-
-        const dy = targetMidY - s.y;
-        let mainPath = "";
-
-        if (Math.abs(dy) < 1) {
-          mainPath = `M ${s.x},${s.y} L ${bracketX},${targetMidY} `;
-        } else {
-          mainPath = `M ${s.x},${s.y} H ${midX} V ${targetMidY} H ${bracketX} `;
-        }
-
-        return fatherLine + motherLine + verticalLine + mainPath;
-      }
-
-      // Default: Normal Connection (Single -> Single)
-      else {
-        // Father/Default: Single Source
-        // Start exactly from node center (s.y). Do NOT offset for spouse.
-        // "Only to the father" -> Implies single line start.
-
-        // Normal Orthogonal Path
-        let midX = (s.x + t.x) / 2;
-        const minGap = 50;
-
-        if (t.x - s.x > minGap * 2 && midX - s.x < minGap) {
-          midX = s.x + minGap;
-        }
-
-        const dy = t.y - s.y;
-        if (Math.abs(dy) < 1) {
-          return `M ${s.x},${s.y} L ${t.x},${t.y} `;
-        }
-
-        return `M ${s.x},${s.y} H ${midX} V ${t.y} H ${t.x} `;
-      }
-    })
-    .attr("fill", "none")
-    .attr("stroke", "#FFFFFF") // All Main Tree Connections are White
-    .attr("stroke-width", 3)
-    .attr("opacity", 1.0);
-
-  // Nodes (Cards)
-  const nodes = g
-    .selectAll(".tree-node")
-    .data(root.descendants())
-    .enter()
-    .append("g")
-    .attr("class", "tree-node")
-    // Swap X and Y for translation
-    .attr("transform", (d) => `translate(${getX(d)}, ${getY(d)})`)
-    // Click removed from here to allow individual card clicks
-    .style("cursor", "border");
-
-  const renderVCard = (selection, data, isSpouse = false) => {
-    const truncate = (str, n) =>
-      str && str.length > n ? str.slice(0, n - 3) + "..." : str;
-    const yOffset = isSpouse ? cardHeight + 20 : 0; // Fixed gap
-    const grp = selection
-      .append("g")
-      .attr("transform", `translate(0, ${yOffset})`);
-
-    // Card Background
-    grp
-      .append("rect")
-      .attr("x", -cardWidth / 2)
-      .attr("y", -cardHeight / 2)
-      .attr("width", cardWidth)
-      .attr("height", cardHeight)
-      .attr("rx", 10)
-      .attr("fill", "url(#card-gradient)") // Use SVG Gradient
-      .attr("class", "tree-card-bg");
-
-    // Add Click Listener to specific card
-    grp.style("cursor", "pointer").on("click", (event) => {
-      event.stopPropagation();
-      // Wrap data to match showModal expectation (d.data...)
-      showModal({ data: data });
-    });
-
-    const clipId = `vclip-${data.id}`;
-    grp
-      .append("clipPath")
-      .attr("id", clipId)
-      .append("circle")
-      .attr("r", 20)
-      .attr("cx", -cardWidth / 2 + 30)
-      .attr("cy", 0);
-
-    grp
-      .append("image")
-      .attr("xlink:href", data.photo)
-      .attr("x", -cardWidth / 2 + 10)
-      .attr("y", -20)
-      .attr("width", 40)
-      .attr("height", 40)
-      .attr("clip-path", `url(#${clipId})`)
-      .attr("preserveAspectRatio", "xMidYMid slice");
-
-    grp
-      .append("circle")
-      .attr("r", 21)
-      .attr("cx", -cardWidth / 2 + 30)
-      .attr("cy", 0)
-      .attr("fill", "none")
-      .attr("stroke", data.isMe ? "#FFD700" : "#4ecca3")
-      .attr("stroke-width", data.isMe ? 4 : 1.5);
-
-    const textGroup = grp
-      .append("g")
-      .attr("transform", `translate(${-cardWidth / 2 + 60}, 0)`);
-
-    textGroup
-      .append("text")
-      .attr("class", "tree-card-name")
-      .attr("y", -2)
-      .text(truncate(data.name, 15))
-      .append("title")
-      .text(data.name);
-
-    textGroup
-      .append("text")
-      .attr("class", "tree-card-relation")
-      .attr("y", 12)
-      .text(truncate(data.relation || "", 20))
-      .append("title")
-      .text(data.relation);
-
-    return grp;
-  };
-
-  nodes.each(function (d) {
-    const el = d3.select(this);
-    renderVCard(el, d.data, false);
-    if (d.data.spouse) {
-      // Spouse exists: Render Spouse Card
-      renderVCard(el, d.data.spouse, true);
-
-      // Draw Vertical Line between Cards (Childless Couple Connection)
-      // Main Card Bottom: Y = 30
-      // Spouse Card Top: Y = 50 (80 - 30)
-      el.append("path")
-        .attr("d", `M 0,30 V 50`)
-        .attr("stroke", "#fff")
-        .attr("stroke-width", 3)
-        .attr("opacity", 1.0);
-
-      // Check for Spousal Parents (Maternal Grandparents etc.)
-      if (d.data.spouse.parents && d.data.spouse.parents.length > 0) {
-        // Render them to the LEFT of the spouse
-        const parentXOffset = -600; // Increased spacing further
-        const spouseYOffset = cardHeight + 20; // Relative to Main Node
-
-        const p1 = d.data.spouse.parents[0];
-        const p2 = d.data.spouse.parents[1];
-
-        // Render Parent 1 (Father)
-        const p1Y = spouseYOffset - 40;
-        const p1Grp = el
-          .append("g")
-          .attr("transform", `translate(${parentXOffset}, ${p1Y})`);
-        renderVCard(p1Grp, p1, false);
-
-        // Render Parent 2 (Mother)
-        const p2Y = spouseYOffset + 40;
-        const p2Grp = el
-          .append("g")
-          .attr("transform", `translate(${parentXOffset}, ${p2Y})`);
-        if (p2) renderVCard(p2Grp, p2, false);
-
-        // Vertical Link between Parents (Center Gap)
-        const p1Bottom = p1Y + cardHeight / 2;
-        const p2Top = p2Y - cardHeight / 2;
-
-        // Draw Vertical Line
-        el.append("path")
-          .attr("d", `M ${parentXOffset},${p1Bottom} V ${p2Top} `)
-          .attr("stroke", colorScale(d.data.spouse.id)) // Spousal Line Color
-          .attr("stroke-width", 3);
-
-        // Horizontal Line to Spouse (from Midpoint)
-        const midY = (p1Y + p2Y) / 2; // Should be spouseYOffset
-        // Connect to Left Edge of Spouse Card (-cardWidth/2)
-
-        el.append("path")
-          .attr("d", `M ${parentXOffset},${midY} H ${-cardWidth / 2} `)
-          .attr("stroke", colorScale(d.data.spouse.id)) // Spousal Line Color
-          .attr("stroke-width", 3)
-          .attr("fill", "none");
-      }
-    }
-  });
-
-  // Zoom
-  const zoom = d3
-    .zoom()
-    .scaleExtent([0.1, 5])
-    .on("zoom", (event) => {
-      g.attr("transform", event.transform);
-    });
-
-  // Center initially (Left side)
-  const initialTransform = d3.zoomIdentity.translate(100, height / 2).scale(1);
-  svg.call(zoom).call(zoom.transform, initialTransform);
-}
-
-// --- 8. Re-Rooting Logic ---
+// --- 7. Re-Rooting Logic ---
 window.reRootTree = function (targetId) {
   if (!rawFamilyData) {
     console.error("No raw data available for re-rooting");
@@ -2538,9 +1699,7 @@ window.reRootTree = function (targetId) {
   }
 
   // Re-render current view (Vertical Tree usually)
-  if (currentView === "vertical-tree") {
-    initVerticalTreeV2();
-  } else if (currentView === "fan") {
+  if (currentView === "fan") {
     initFan(String(targetId));
   } else {
     initApp();
