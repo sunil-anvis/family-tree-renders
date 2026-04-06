@@ -814,12 +814,12 @@ function initFan(startNodeId = null) {
   // Override Layout
   // Assign x0, x1 (Angle) and y0, y1 (Radius)
   // Extend rings for depth 15
-  const ringThickness = [0];
+  const ringThickness = [80]; // Index 0 is the center circle radius
   for (let i = 1; i <= 15; i++) ringThickness.push(i <= 4 ? 80 : 60); // Decreasing thickness? Or constant.
 
   const depthStartRadius = [0];
   for (let i = 1; i < ringThickness.length; i++) {
-    depthStartRadius[i] = depthStartRadius[i - 1] + ringThickness[i];
+    depthStartRadius[i] = depthStartRadius[i - 1] + ringThickness[i - 1];
   }
 
   // Angular Threshold Config
@@ -831,7 +831,7 @@ function initFan(startNodeId = null) {
       d.x0 = 0;
       d.x1 = 2 * Math.PI;
       d.y0 = 0;
-      d.y1 = ringThickness[1] - 5; // Center Circle Radius
+      d.y1 = ringThickness[0] - 5; // Center Circle Radius
 
       // Identify "Mother" side if we want strict split?
       // Standard: Sort by something?
@@ -983,16 +983,16 @@ function initFan(startNodeId = null) {
         d.children.forEach((c) => (c.isSystemHidden = true));
 
         const rStart = depthStartRadius[d.depth + 1] || (d.depth + 1) * 80;
-        const rThick = ringThickness[d.depth + 1] || 60;
+        const rThick = 40; // Fixed thin height for button ring
 
         const plusNode = {
           data: { id: d.data.id, name: "+", isPlus: true },
           depth: d.depth + 1,
           x0: d.x0,
           x1: d.x1,
-          y0: rStart + 5,
-          y1: rStart + rThick - 5,
-          color: "#333",
+          y0: rStart + 2,
+          y1: rStart + 22,
+          color: "#999999", // Updated to match new grey theme
           isPlusButton: true,
           parent: d,
         };
@@ -1146,7 +1146,7 @@ function initFan(startNodeId = null) {
         return arc(d);
       })
       .style("fill", (d) => {
-        if (d.isPlusButton) return "#333";
+        if (d.isPlusButton) return "#777";
         return isTop ? (d.color || "#ccc") : darken(d.color || "#ccc", 0.5 + (NUM_LAYERS - i) * 0.1);
       })
       .style("stroke", (d) => (isTop ? "#333" : "none"))
@@ -1274,23 +1274,15 @@ function initFan(startNodeId = null) {
       const meNameSize = isMobile ? "12px" : "14px";
       el.append("text")
         .text(d.data.name)
-        .attr("y", -8)
+        .attr("y", 0)
+        .attr("dominant-baseline", "central")
         .attr("dy", 0)
         .style("font-size", meNameSize)
         .style("font-weight", "bold")
         .call(wrap, isMobile ? 80 : 100);
 
       // Relation — strip parenthetical detail e.g. "Brother-in-law (Sister's Husband)" → "Brother-in-law"
-      if (d.data.relation) {
-        const cleanRel = d.data.relation.replace(/\s*\(.*?\)\s*/g, "").trim();
-        if (cleanRel) {
-          el.append("text")
-            .text(cleanRel)
-            .attr("y", 12)
-            .style("font-size", "10px")
-            .style("fill", "#555");
-        }
-      }
+      // Relation text removed to simplify fan block view
       return;
     }
 
@@ -1338,9 +1330,9 @@ function initFan(startNodeId = null) {
     const name = d.data.name || "";
     const nameWidth = name.length * primaryFontSize * 0.55;
 
-    // If name is too wide for one line, try splitting it
+    // If name is too wide for one line, try splitting it (ONLY for wide tangential labels)
     const parts = name.split(/\s+/);
-    const useTwoLines = nameWidth > arcLengthPixels && parts.length > 1;
+    const useTwoLines = !isSlanted && nameWidth > arcLengthPixels && parts.length > 1;
 
     // ABSOLUTE VISIBILITY CHECK: Only hide if it's physically impossible to fit
     if (arcLengthPixels < 12 && d.depth > 1) return;
@@ -1379,9 +1371,9 @@ function initFan(startNodeId = null) {
         .style("font-size", primaryFontSize + "px")
         .style("font-weight", "bold");
 
-      // Auto-truncate if still overflowing single line
-      if (nameWidth > arcLengthPixels) {
-        const maxChars = Math.floor(arcLengthPixels / (primaryFontSize * 0.6));
+      // Auto-truncate if still overflowing single line (respect radial height for slanted labels)
+      if (nameWidth > availableWidth) {
+        const maxChars = Math.floor(availableWidth / (primaryFontSize * 0.6));
         if (maxChars > 3) {
           textEl.text(name.slice(0, maxChars - 1) + "..");
         } else {
@@ -1390,19 +1382,7 @@ function initFan(startNodeId = null) {
       }
     }
 
-    // Relation (only if there is height space)
-    if (radialThickness > 35 && !useTwoLines) {
-      const rel = d.data.relation ? d.data.relation.replace(/\s*\(.*?\)\s*/g, "").trim() : "";
-      if (rel) {
-        el.append("text")
-          .text(rel)
-          .attr("dominant-baseline", "central")
-          .attr("text-anchor", "middle")
-          .attr("y", primaryFontSize + 2)
-          .style("font-size", (primaryFontSize * 0.8) + "px")
-          .style("fill", "#666");
-      }
-    }
+    // Relation hidden as per request (can be seen in card)
   });
 
   // Zoom Logic

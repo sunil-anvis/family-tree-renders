@@ -276,8 +276,7 @@ function initFan(startNodeId = null) {
   // Override Layout
   // Assign x0, x1 (Angle) and y0, y1 (Radius)
   // Extend rings for depth 15
-  const ringThickness = [0];
-  // Standardized professional thickness progression
+  const ringThickness = [100]; // Index 0 = Center Ring Radius
   for (let i = 1; i <= 15; i++) {
     if (i <= 4) ringThickness.push(100);
     else if (i <= 10) ringThickness.push(70);
@@ -286,7 +285,7 @@ function initFan(startNodeId = null) {
 
   const depthStartRadius = [0];
   for (let i = 1; i < ringThickness.length; i++) {
-    depthStartRadius[i] = depthStartRadius[i - 1] + ringThickness[i];
+    depthStartRadius[i] = depthStartRadius[i - 1] + ringThickness[i - 1];
   }
 
   // Angular Threshold Config
@@ -298,7 +297,7 @@ function initFan(startNodeId = null) {
       d.x0 = 0;
       d.x1 = 2 * Math.PI;
       d.y0 = 0;
-      d.y1 = ringThickness[1] - 15; // Increased gap for premium separation
+      d.y1 = ringThickness[0] - 15; // Increased gap for premium separation
 
       // Identify "Mother" side if we want strict split?
       // Standard: Sort by something?
@@ -448,16 +447,16 @@ function initFan(startNodeId = null) {
         d.children.forEach((c) => (c.isSystemHidden = true));
 
         const rStart = depthStartRadius[d.depth + 1] || (d.depth + 1) * 80;
-        const rThick = ringThickness[d.depth + 1] || 60;
+        const rThick = 40; // Fixed thin height for button ring
 
         const plusNode = {
           data: { id: d.data.id, name: "+", isPlus: true },
           depth: d.depth + 1,
           x0: d.x0,
           x1: d.x1,
-          y0: rStart + 15,
-          y1: rStart + rThick - 15,
-          color: "#333",
+          y0: rStart + 2,
+          y1: rStart + 22,
+          color: "#777", // Updated to match new grey theme
           isPlusButton: true,
           parent: d,
         };
@@ -613,7 +612,7 @@ function initFan(startNodeId = null) {
         return modifiedArc(d);
       })
       .style("fill", (d) => {
-        if (d.isPlusButton) return "#333";
+        if (d.isPlusButton) return "#777";
         return isTop ? d.color : darken(d.color, 0.5 + (NUM_LAYERS - i) * 0.1);
       })
       .style("stroke", (d) => (isTop ? "#333" : "none"))
@@ -748,27 +747,14 @@ function initFan(startNodeId = null) {
       // Name
       el.append("text")
         .text(d.data.name)
-        .attr("y", -10) // Moved up slightly to accommodate multiple lines
+        .attr("y", 0)
+        .attr("dominant-baseline", "central")
         .attr("dy", 0)
         .style("font-size", "14px")
         .style("font-weight", "bold")
         .call(wrap, 100); // Wrap width ~100px (Center circle is roughly 120px wide)
 
-      // Relation (e.g., "Family Member" or "Myself") — strip parenthetical details
-      if (d.data.relation) {
-        const centerRelation = d.data.relation.replace(/\s*\(.*?\)\s*/g, "").trim();
-        if (centerRelation) {
-          el.append("text")
-            .text(centerRelation)
-            .attr("dominant-baseline", "central")
-            .attr("text-anchor", "middle")
-            .attr("y", 12)
-            .attr("dy", 0)
-            .style("font-size", "10px")
-            .style("fill", "#555")
-            .call(wrap, 90);
-        }
-      }
+      // Relation text removed to simplify fan block view
       return;
     }
 
@@ -890,9 +876,7 @@ function initFan(startNodeId = null) {
         // To center both Name and Relation as a block:
         // Name at yOffsetName, Relation at yOffsetRel
         // If no relation, Name at 0.
-        const hasRelation = relFontSize > 0 && availableHeight > nameFontSize * 2.2;
-        const totalHeight = hasRelation ? nameFontSize + relFontSize + 4 : nameFontSize;
-        const nameY = hasRelation ? -totalHeight / 2 + nameFontSize / 2 : 0;
+        const nameY = 0; // Vertical center since no relation label is shown
 
         const nameText = el
           .append("text")
@@ -906,20 +890,7 @@ function initFan(startNodeId = null) {
 
         truncateAndAppend(nameText, name, availableWidth, nameFontSize);
 
-        if (hasRelation) {
-          const relY = nameY + nameFontSize / 2 + relFontSize / 2 + 4;
-          const relText = el
-            .append("text")
-            .text(relationText)
-            .attr("dominant-baseline", "central")
-            .attr("text-anchor", "middle")
-            .attr("y", relY)
-            .style("font-size", relFontSize + "px")
-            .style("fill", "#444")
-            .style("pointer-events", "none");
-
-          truncateAndAppend(relText, relationText, availableWidth, relFontSize);
-        }
+        // Relation removed from fan block view per request (can be seen in card)
       }
     }
   });

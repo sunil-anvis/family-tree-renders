@@ -17,7 +17,12 @@ function init3DTree() {
 
   // Config
   const bh = 120; // Block Depth (Y-axis visual)
-  const getExtrusion = (depth) => Math.max(10, 50 - depth * 2); // Dynamic Extrusion: 50 layers start, -2 per gen
+  const getExtrusion = (depth) => {
+    if (depth === 0) return 100;
+    if (depth === 1) return 60;
+    return 30;
+  };
+
   const cardWidth = 70; // Reduced width
   const cardHeight = 90; // Reduced height
   const tileW = 50;
@@ -196,8 +201,10 @@ function init3DTree() {
   // --- Layers ---
   const shadowLayer = g.append("g");
   const blockLayer = g.append("g"); // Blocks
-  const linkLayer = g.append("g"); // Links ON TOP
+  const linkLayer = g.append("g"); // Links on top of blocks to connect members
   const avatarLayer = g.append("g");
+
+
 
   // --- Blocks (Platforms) ---
   // Group by parent to create shared platforms
@@ -307,10 +314,9 @@ Z`;
     // The Side Wall should be a LIGHTER tint of that base.
 
     const baseColor = getGenColor(siblings[0]);
-
     const topColor = baseColor; // Top gets the rich color
-    const sideColor = d3.hsl(baseColor);
-    sideColor.l += 0.15; // Side is lighter
+    const sideColor = d3.color(baseColor).darker(0.5); // Darker side for 3D depth
+
 
     // Render Shadow (Initially Hidden)
     shadowLayer
@@ -361,8 +367,18 @@ Z`;
       .append("path")
       .attr("d", topPath)
       .attr("fill", topColor)
+      .attr("fill-opacity", 1.0) // No transparency to prevent see-through lines
       .attr("stroke", borderColor)
       .attr("stroke-width", 2);
+
+
+    // High-End Shine Effect (Pseudo-Glass)
+    grp.append("path")
+      .attr("d", topPath)
+      .attr("fill", "url(#glass-gradient)")
+      .attr("fill-opacity", 0.35)
+      .attr("pointer-events", "none");
+
 
     // Generation Label (On Top Surface)
     grp
@@ -415,62 +431,41 @@ Z`;
       return l === 0 ? [0, 0] : [v[0] / l, v[1] / l];
     };
 
-    const generateSinglePath = (linkSx, linkTx) => {
-      // Offset start/end to be at the block boundary_
-      const yOffset = 30; // Closer to avatar
+    const generateSinglePath = (linkSx, linkTx, customYOffset = null) => {
+      // Offset start/end to be at the exact icon position (0 offset)
+      const yOffset = customYOffset !== null ? customYOffset : 0;
+      
+      const linkZOffset = 7.5; // Use half-height for vertical center
+      const sz_adj = sz + linkZOffset;
+      const tz_adj = tz + linkZOffset;
 
-      const p0 = project(linkSx, sy + yOffset, sz); // Start (Bottom of source block)
-      const p1 = project(linkSx, midY, sz); // Corner 1 vertical
+      const p0 = project(linkSx, sy + yOffset, sz_adj); // Start (at parent center)
+      const p1 = project(linkSx, midY, sz_adj); // Corner 1 (Turn at top)
+      const p1_drop = project(linkSx, midY, tz_adj); // Vertical Drop (Drop between z levels)
+      const p2 = project(linkTx, midY, tz_adj); // Corner 2 (Turn at bottom level)
+      const p3 = project(linkTx, ty, tz_adj); // End (at child center)
 
-      const p2 = project(linkTx, midY, tz); // Corner 2 horizontal end
-      const p3 = project(linkTx, ty - yOffset, tz); // End (Top of target block)
-
-      // Rounding Radius
-      const r = 15;
-
-      // 1. Segment P0 -> P1
-      const v01 = sub(p1, p0);
-      const d01 = len(v01);
-
-      // 2. Segment P1 -> P2 (Bridge)
-      const v12 = sub(p2, p1);
-      const d12 = len(v12);
-
-      // 3. Segment P2 -> P3
-      const v23 = sub(p3, p2);
-      const d23 = len(v23);
-
-      if (d01 < r || d12 < r || d23 < r) {
-        // Too short for curves, draw straight
-        return `M ${p0[0]},${p0[1]} L ${p1[0]},${p1[1]} L ${p2[0]},${p2[1]} L ${p3[0]},${p3[1]}`;
-      }
-
-      // Calculate Start/End points of curves
-      // Corner 1 (at P1)
-      const c1_start = add(p1, scale(norm(sub(p0, p1)), r)); // Back towards P0
-      const c1_end = add(p1, scale(norm(sub(p2, p1)), r)); // Fwd towards P2
-
-      // Corner 2 (at P2)
-      const c2_start = add(p2, scale(norm(sub(p1, p2)), r)); // Back towards P1
-      const c2_end = add(p2, scale(norm(sub(p3, p2)), r)); // Fwd towards P3
-
-      // Build Path
-      return `M ${p0[0]},${p0[1]}
-                  L ${c1_start[0]},${c1_start[1]}
-                  Q ${p1[0]},${p1[1]} ${c1_end[0]},${c1_end[1]}
-                  L ${c2_start[0]},${c2_start[1]}
-                  Q ${p2[0]},${p2[1]} ${c2_end[0]},${c2_end[1]}
-                  L ${p3[0]},${p3[1]} `;
+      return `M ${p0[0]},${p0[1]} L ${p1[0]},${p1[1]} L ${p1_drop[0]},${p1_drop[1]} L ${p2[0]},${p2[1]} L ${p3[0]},${p3[1]}`;
     };
 
-    let path = generateSinglePath(sx, tx);
-
     if (s.data.spouse) {
-      const AVATAR_Gap = 110;
-      path += " " + generateSinglePath(sx + AVATAR_Gap, tx);
+      const AVATAR_Gap = 180;
+      const midSx = sx + AVATAR_Gap / 2;
+      const h_adj = sz + 7.5; // Shared height for bar and child link
+      
+      // Points for parent connector bar (vertical centers of icons)
+      const pParent1 = project(sx, sy, h_adj);
+      const pParent2 = project(sx + AVATAR_Gap, sy, h_adj);
+      
+      const barPath = `M ${pParent1[0]},${pParent1[1]} L ${pParent2[0]},${pParent2[1]} `;
+      
+      // Start child branch from the SAME h_adj and midSx
+      return barPath + generateSinglePath(midSx, tx, 0);
     }
 
-    return path;
+    return generateSinglePath(sx, tx, 0);
+
+
   };
 
   linkLayer
@@ -485,7 +480,8 @@ Z`;
       const targetColor = getGenColor(d.target);
       return d3.color(targetColor).darker(1.2).hex();
     })
-    .attr("stroke-width", 4) // Slightly clear stroke
+    .attr("stroke-width", 5) // Slightly clearer premium stroke
+
     .attr("stroke-linecap", "round")
     .attr("stroke-linejoin", "round")
     .attr("transform", `translate(0, 0)`) // No global shift needed if Z is correct
@@ -524,18 +520,7 @@ Z`;
     const g = d3.select(this);
 
     const renderAvatar = (data, isSpouse) => {
-      const xOff = isSpouse ? 110 : 0; // Increased to 110 for text spacing
-
-      // CRITICAL FIX: Use current projection for offset
-      // Calculate offset in ISO space relative to (0,0)
-      // We want to move +xOff in Tree X Axis.
-      // toIso(x, y) = [rx * scale, ry * tilt * scale]
-      // where rx = x*cos - y*sin, ry = x*sin + y*cos
-
-      // Delta X offset:
-      // rx_d = xOff * cos - 0 * sin = xOff * cos
-      // ry_d = xOff * sin + 0 * cos = xOff * sin
-
+      const xOff = isSpouse ? 180 : 0; 
       const dx = xOff * cos * scale;
       const dy = xOff * sin * params.tilt * scale;
 
@@ -549,10 +534,7 @@ Z`;
             .duration(200)
             .ease(d3.easeCubicOut)
             .attr("transform", `translate(${dx}, ${dy - 20}) scale(1.1)`);
-
-          // Bring entire family group to front to avoid clipping by row below
           d3.select(this.parentNode).raise();
-          // Bring this specific person to front of the pair
           d3.select(this).raise();
         })
         .on("mouseout", function (event) {
@@ -564,252 +546,114 @@ Z`;
         })
         .on("click", (e) => {
           e.stopPropagation();
-          // Construct a mock node object for showModal if needed,
-          // or just pass { data: data } since showModal reads d.data
           showModal({ data: data });
         });
 
-      // ... Render Avatar Content into avGrp ...
-      // (Copy existing avatar rendering code here)
-
-      const color = getGenColor(d); // Shared generation color
-
-      // ... Code from below ...
-      // Helper for Initials
-      const getInitials = (name) =>
-        name
-          .split(" ")
-          .map((n) => n[0])
-          .join("")
-          .substring(0, 2)
-          .toUpperCase();
-
-      // Helper for Avatar Color based on Gen Theme & Gender
-      const getAvatarThemeColor = (nodeData, theme) => {
-        // Evaluate by checking if explicit female tag exists, else fall back to male logic
-        const isFemale = nodeData.gender === 'f' || nodeData.gender === 'F';
-        return isFemale ? theme.female : theme.male;
-      };
-
-      // Scale for internal geometry
-      const avatarScale = 0.8;
-      const localIso = (dx, dy) => [
-        (dx - dy) * avatarScale,
-        (dx + dy) * 0.5 * avatarScale,
-      ];
-
-      const w = tileW;
-      // const h = tileH;
-      const r = tileR;
-
-      // Bounds relative to center
-      const l = -w / 2,
-        right = w / 2,
-        t = -w / 2,
-        b = w / 2;
-
-      // Helper to project local coord (lx, ly, lz) -> 2D
-      const pLoc = (lx, ly, lz) => {
-        const [ix, iy] = localIso(lx, ly);
-        return [ix, iy - lz];
-      };
-
-      const tz = tileH;
-
-      // --- Paths ---
-      // --- Paths ---
-      // Tangent points for Top Face
-      const top_tz = tz;
-      const t_l_t = pLoc(l, t + r, top_tz);
-      const t_l_b = pLoc(l, b - r, top_tz);
-      const t_b_l = pLoc(l + r, b, top_tz);
-      const t_b_r = pLoc(right - r, b, top_tz);
-      const t_r_b = pLoc(right, b - r, top_tz);
-      const t_r_t = pLoc(right, t + r, top_tz);
-      const t_t_r = pLoc(right - r, t, top_tz);
-      const t_t_l = pLoc(l + r, t, top_tz);
-
-      // Control Points
-      const cp_l_t = pLoc(l, t, top_tz);
-      const cp_l_b = pLoc(l, b, top_tz);
-      const cp_r_b = pLoc(right, b, top_tz);
-      const cp_r_t = pLoc(right, t, top_tz);
-
-      const topPathIdx = `M ${t_l_t} L ${t_l_b} Q ${cp_l_b} ${t_b_l} L ${t_b_r} Q ${cp_r_b} ${t_r_b} L ${t_r_t} Q ${cp_r_t} ${t_t_r} L ${t_t_l} Q ${cp_l_t} ${t_l_t} Z`;
-
-      // Side Wall (Simplified to Visible Faces)
-      // Visible faces: Bottom edge and Right edge
-      // Fix: Use overlapZ to tuck side skirt under top face
-      const overlapZ = 0;
-      const skirt_tz = tz + overlapZ;
-
-      // Top Edge Points for Skirt (Raised)
-      const st_l_b = pLoc(l, b - r, skirt_tz);
-      const st_b_l = pLoc(l + r, b, skirt_tz);
-      const st_b_r = pLoc(right - r, b, skirt_tz);
-      const st_r_b = pLoc(right, b - r, skirt_tz);
-      const st_r_t = pLoc(right, t + r, skirt_tz);
-
-      const scp_l_b = pLoc(l, b, skirt_tz);
-      const scp_r_b = pLoc(right, b, skirt_tz);
-
-      // Bottom Edge Points (Z=0)
-      const bz = 0;
-      const b_t_l_b = pLoc(l, b - r, bz);
-      const b_cp_l_b = pLoc(l, b, bz);
-      const b_t_b_l = pLoc(l + r, b, bz);
-      const b_t_b_r = pLoc(right - r, b, bz);
-      const b_cp_r_b = pLoc(right, b, bz);
-      const b_t_r_b = pLoc(right, b - r, bz);
-      const b_t_r_t = pLoc(right, t + r, bz);
-
-      // Construct Loop for Side skirt using Raised Top Points
-      const st_t_r = pLoc(right - r, t, skirt_tz);
-      const scp_r_t = pLoc(right, t, skirt_tz);
-      const b_t_t_r = pLoc(right - r, t, bz);
-      const b_cp_r_t = pLoc(right, t, bz);
-
-      const sidePath = `
-                 M ${st_t_r}
-                 Q ${scp_r_t} ${st_r_t}
-                 L ${st_r_b} Q ${scp_r_b} ${st_b_r}
-                 L ${st_b_l} Q ${scp_l_b} ${st_l_b}
-                 L ${st_l_b}
-                 L ${b_t_l_b} Q ${b_cp_l_b} ${b_t_b_l}
-                 L ${b_t_b_r} Q ${b_cp_r_b} ${b_t_r_b}
-                 L ${b_t_r_t} Q ${b_cp_r_t} ${b_t_t_r}
-                 L ${st_t_r} Z`;
-
-      // Draw Side (Solid Block)
-      avGrp
-        .append("path")
-        .attr("d", sidePath)
-        .attr("fill", d3.color(color).darker(0.8)) // Darker side for 3D effect
-        .attr("stroke", d3.color(color).darker(1.0))
-        .attr("stroke-width", 1)
-        .attr("stroke-linejoin", "round");
-
-      // Draw Top (Solid Block)
       const currentTheme = getGenTheme(d);
-      const tileColor = data.isMe ? "#0D8ABC" : getAvatarThemeColor(data, currentTheme);
+      const isFemale = data.gender === 'f' || data.gender === 'F';
+      const themeColor = isFemale ? currentTheme.female : currentTheme.male;
 
-      // Solid Color
-      avGrp
-        .append("path")
-        .attr("id", `tile - path - ${data.id} `)
-        .attr("d", topPathIdx)
-        .attr("fill", tileColor) // Solid fill
+      const avatarW = 55; 
+      const avatarR = 6;
+      const chipH = 15; 
+
+      // 1. Precise 3D Projection Helper
+      // (Uses the same math as matrixStr to ensure perfect seams)
+      const p3d = (lx, ly, lz) => [
+        lx * mx + ly * nx,
+        lx * my + ly * ny - lz
+      ];
+      
+      const l = -avatarW/2, r = avatarW/2, t = -avatarW/2, b = avatarW/2;
+      const sideColorLeft = d3.color(themeColor).darker(1.2);
+      const sideColorRight = d3.color(themeColor).darker(0.8);
+
+      // --- Side Walls (Drawn FIRST so they stay behind) ---
+      // Front-Right Wall
+      avGrp.append("path")
+        .attr("d", `M ${p3d(r, t, 0)} L ${p3d(r, t, chipH)} L ${p3d(r, b, chipH)} L ${p3d(r, b, 0)} Z`)
+        .attr("fill", sideColorRight);
+      
+      // Front-Left Wall
+      avGrp.append("path")
+        .attr("d", `M ${p3d(l, b, 0)} L ${p3d(l, b, chipH)} L ${p3d(r, b, chipH)} L ${p3d(r, b, 0)} Z`)
+        .attr("fill", sideColorLeft);
+
+      // --- Top Face (Raised) ---
+      const topGrp = avGrp.append("g")
+        .attr("transform", `translate(0, -${chipH}) matrix(${matrixStr})`);
+
+      topGrp.append("rect")
+        .attr("x", -avatarW/2)
+        .attr("y", -avatarW/2)
+        .attr("width", avatarW)
+        .attr("height", avatarW)
+        .attr("rx", avatarR)
+        .attr("fill", data.isMe ? "#FFD700" : themeColor)
         .attr("stroke", "white")
-        .attr("stroke-width", 2);
+        .attr("stroke-width", 1)
+        .style("filter", "url(#soft-shadow)");
 
-      // Initials (Native SVG Text)
-      // Use dynamic matrix based on 'labels' param
-      const activeMatrix =
-        params.labels === "billboard" ? billboardMatrixStr : matrixStr;
+      // Image Clip
+      const clipId = `clip-iso-cube-v3-${data.id}-${isSpouse?'s':''}`;
+      defs.append("clipPath")
+        .attr("id", clipId)
+        .append("rect")
+        .attr("x", -avatarW/2 + 1)
+        .attr("y", -avatarW/2 + 1)
+        .attr("width", avatarW - 2)
+        .attr("height", avatarW - 2)
+        .attr("rx", avatarR - 1);
 
-      avGrp
-        .append("text")
-        .text(getInitials(data.name))
-        .attr("x", 0)
-        .attr("y", 0)
-        .attr("text-anchor", "middle")
-        .attr("dominant-baseline", "central")
-        .attr("fill", "rgba(255,255,255, 0.9)")
-        .attr("font-size", "22px")
-        .attr("font-weight", "bold")
-        .style("font-family", "sans-serif")
-        .style("pointer-events", "none")
-        // Add a subtle drop shadow to initials
-        .style("text-shadow", "1px 1px 2px rgba(0,0,0,0.3)")
-        .attr("transform", `translate(0, ${-tz}) matrix(${activeMatrix})`);
+      topGrp.append("image")
+        .attr("xlink:href", data.photo || "https://cdn-icons-png.flaticon.com/512/149/149071.png")
+        .attr("x", -avatarW/2 + 1)
+        .attr("y", -avatarW/2 + 1)
+        .attr("width", avatarW - 2)
+        .attr("height", avatarW - 2)
+        .attr("clip-path", `url(#${clipId})`)
+        .attr("preserveAspectRatio", "xMidYMid slice");
 
-      // Overlay for "Me" border
-      if (data.isMe) {
-        avGrp
-          .append("use")
-          .attr("xlink:href", `#tile - path - ${data.id} `)
-          .attr("fill", "none")
-          .attr("stroke", "#FFD700")
-          .attr("stroke-width", 2)
-          .attr("stroke-opacity", 0.8);
-      }
+      // --- Name Label (Aligned with Generation Text - Front-Left) ---
+      // We use base matrixStr and move to the front-left spot
+      const labelG = avGrp.append("g")
+        .attr("transform", `translate(-60, ${avatarW/2 - 20}) matrix(${matrixStr})`);
 
-      // --- Text Below Block (Billboard - Flat 2D) ---
-      // We want the text to float underneath the block.
-      // The block is centered at (0,0) in avGrp local coords (which is top-face center).
-      // We need to move down by the block height + some padding.
-      // However, we are in ISOMETRIC VIEW. "Down" on screen is +Y.
 
-      // --- Text Below Block (Isometric - Lying Flat) ---
-      // User requested "direction of user icon", implying isometric projection.
-      // We use the same matrix as the top face for consistency.
-      // Top Face Matrix (basis vectors): X=(0.8, 0.4), Y=(-0.8, 0.4)
-      // But we actually want the text to read horizontally-ish?
-      // If we use the exact top-face matrix, text runs along the diagonal.
-      // Let's align it with the "Row" axis (Visual X).
 
-      // Revert to "Floor" style but centered and clean (No pill).
 
-      // We need to move it "down" in 3D space.
-      // In tree space, +y is "depth/down".
-      // So we can just translate in the group transform?
-      // But this group is inside `g` which is at (ix, iy).
-      // A visual Y offset of +50px moves it down-screen.
 
-      // Matrix to make it look like it's on the plane:
-      // Standard Iso: rotate(-30) skewX(30)?
-      // Let's use the explicit matrix for control.
-      // We want the text baseline to align with the Row Axis (Down-Right).
-      // That vector is (1, 0.5) roughly.
+      labelG.append("text")
+        .text(data.name)
+        .attr("text-anchor", "start")
 
-      let textTransform;
-      if (params.labels === "billboard") {
-        // Simple offset down in screen Y
-        textTransform = `translate(0, ${30 + tz * params.zScale}) matrix(${billboardMatrixStr})`;
-      } else {
-        // Iso Mode (On floor)
-        textTransform = `translate(0, 30) matrix(${matrixStr})`; // +30 units in Local Floor Y?
-      }
-
-      // Helper to truncate text
-      const truncate = (str, n) =>
-        str && str.length > n ? str.slice(0, n - 3) + "..." : str;
-
-      const textG = avGrp.append("g").attr("transform", textTransform);
-
-      // Name
-      const nameText = textG
-        .append("text")
-        .text(truncate(data.name, 15)) // Truncate name
-        .attr("text-anchor", "middle")
-        .attr("fill", "#222")
+        .attr("fill", "#fff")
         .attr("font-size", "14px")
         .attr("font-weight", "bold")
-        .style("font-family", "sans-serif");
+        .style("font-family", "sans-serif")
+        .style("text-shadow", "0px 1px 3px rgba(0,0,0,0.8)");
 
-      nameText.append("title").text(data.name); // Tooltip
-
-      // Relation
       if (!data.isMe) {
-        const relationText = textG
-          .append("text")
-          .text(truncate(data.relation, 20)) // Truncate relation
-          .attr("text-anchor", "middle")
+        labelG.append("text")
+          .text(data.relation)
           .attr("y", 14)
-          .attr("fill", "#555")
+          .attr("text-anchor", "start")
+
+          .attr("fill", "#ccc")
           .attr("font-size", "10px")
           .style("font-family", "sans-serif")
-          .style("text-transform", "uppercase");
-
-        relationText.append("title").text(data.relation); // Tooltip
+          .style("text-transform", "uppercase")
+          .attr("opacity", 0.9);
       }
+
+
     };
 
     renderAvatar(d.data, false);
     if (d.data.spouse) {
       renderAvatar(d.data.spouse, true);
     }
-  }); // Zoom
+  });
 
   const zoom = d3
     .zoom()
@@ -817,9 +661,8 @@ Z`;
     .on("zoom", (e) => g.attr("transform", e.transform));
   svg.call(zoom);
 
-  svg.call(zoom);
-
   // --- ANIMATION SEQUENCE ---
+
   // Replaces static auto-zoom
 
   const playStartupAnimation = () => {
