@@ -15,7 +15,16 @@ function initPedigreeView() {
   svg.selectAll("*").remove();
   svg.on(".drag", null);
   svg.on(".zoom", null);
-  svg.style("background", "#f5f7fa");
+  const isDark = typeof window.isDarkMode !== "undefined" && window.isDarkMode;
+  const bgColor = isDark ? "#121212" : "#f5f7fa";
+  const cardBg = isDark ? "#1e1e1e" : "#ffffff";
+  const textColor = isDark ? "#e0e0e0" : "#37474f";
+  const subTextColor = isDark ? "#a0aab0" : "#78909c";
+  const titleColor = isDark ? "#90a4ae" : "#546e7a";
+  const lineColor = isDark ? "#455a64" : "#e2e8f0";
+  const shadowColor = isDark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.07)";
+
+  svg.style("background", bgColor);
 
   const width = +svg.attr("width");
   const height = +svg.attr("height");
@@ -29,7 +38,7 @@ function initPedigreeView() {
   const V_GAP = 14; // vertical gap between adjacent cards (equal everywhere)
   const BEND_R = 10; // rounded corner radius for connectors
 
-  const LINE_COLOR = "#e2e8f0";
+  const LINE_COLOR = lineColor;
   const LINE_W = 2.0;
   const MALE_BORDER = "#51d1e3";
   const FEMALE_BORDER = "#f5a3c7";
@@ -194,7 +203,7 @@ function initPedigreeView() {
     .attr("dx", 0)
     .attr("dy", 1)
     .attr("stdDeviation", 4)
-    .attr("flood-color", "rgba(0,0,0,0.07)");
+    .attr("flood-color", shadowColor);
 
   const lineG = g.append("g");
   const cardG = g.append("g");
@@ -260,7 +269,7 @@ function initPedigreeView() {
       .attr("width", CARD_W)
       .attr("height", CARD_H)
       .attr("rx", CARD_R)
-      .attr("fill", "white")
+      .attr("fill", cardBg)
       .attr("stroke", borderColor)
       .attr("stroke-width", 1.5)
       .attr("filter", "url(#ped-shadow)");
@@ -283,7 +292,7 @@ function initPedigreeView() {
       .attr("cx", avX)
       .attr("cy", 0)
       .attr("r", AVATAR_R + 2)
-      .attr("fill", ringBg)
+      .attr("fill", isDark ? "#263238" : ringBg)
       .attr("stroke", borderColor)
       .attr("stroke-width", 1.2);
 
@@ -306,7 +315,7 @@ function initPedigreeView() {
       .attr("font-family", "'Poppins', 'Segoe UI', sans-serif")
       .attr("font-size", "12px")
       .attr("font-weight", 600)
-      .attr("fill", "#37474f")
+      .attr("fill", textColor)
       .text(trunc(person.name, 16))
       .append("title")
       .text(person.name);
@@ -319,7 +328,7 @@ function initPedigreeView() {
       .attr("font-family", "'Poppins', 'Segoe UI', sans-serif")
       .attr("font-size", "9px")
       .attr("font-weight", 400)
-      .attr("fill", "#a0aab0")
+      .attr("fill", subTextColor)
       .text(trunc(person.relation || "", 24));
   });
 
@@ -331,7 +340,7 @@ function initPedigreeView() {
     .attr("font-family", "'Poppins', sans-serif")
     .attr("font-size", "15px")
     .attr("font-weight", 600)
-    .attr("fill", "#546e7a")
+    .attr("fill", titleColor)
     .text("Pedigree View");
 
   // --- Zoom & Pan ---

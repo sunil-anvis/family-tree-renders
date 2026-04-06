@@ -2659,7 +2659,9 @@ document.addEventListener("DOMContentLoaded", () => {
       // Re-render D3 views if active so they can optionally update layout-based backgrounds
       if (
         typeof currentView !== "undefined" &&
-        (currentView === "fan" || currentView === "isometric")
+        (currentView === "fan" ||
+          currentView === "isometric" ||
+          currentView === "pedigree")
       ) {
         if (typeof switchView === "function") {
           switchView(currentView);
