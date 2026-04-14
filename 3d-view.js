@@ -17,11 +17,7 @@ function init3DTree() {
 
   // Config
   const bh = 120; // Block Depth (Y-axis visual)
-  const getExtrusion = (depth) => {
-    if (depth === 0) return 100;
-    if (depth === 1) return 60;
-    return 30;
-  };
+  const getExtrusion = (depth) => 40; // Reduced height (from 80 to 40)
 
   const cardWidth = 70; // Reduced width
   const cardHeight = 90; // Reduced height
@@ -139,7 +135,7 @@ function init3DTree() {
   // Glass Gloss Gradient
   const glassGradient = defs
     .append("linearGradient")
-    .attr("id", "glass-gloss")
+    .attr("id", "glass-effect")
     .attr("x1", "0%")
     .attr("y1", "0%")
     .attr("x2", "100%")
@@ -163,19 +159,19 @@ function init3DTree() {
 
   // Standard Tree Layout
   // Adapt layout to view angle
-  let xSpacing = 400; // Default wide spacing
-  let ySpacing = 450;
+  let xSpacing = 700; // Increased from 320 to fix overlaps
+  let ySpacing = 600; // Increased from 450 for better depth
 
   // If viewing from Side/Front, we might want deeper separation?
   // Side view compress X visually.
   if (currentIsoAngle === "left" || currentIsoAngle === "right") {
-    ySpacing = 600; // More vertical gap
+    ySpacing = 800; // More vertical gap
   }
 
   const treeLayout = d3
     .tree()
     .nodeSize([xSpacing, ySpacing])
-    .separation((a, b) => (a.parent == b.parent ? 1.1 : 2.2)); // Increased cousin separation
+    .separation((a, b) => (a.parent == b.parent ? 1.2 : 2.5)); // Added more air between sibling groups
 
   const root = d3.hierarchy(familyData);
   treeLayout(root);
@@ -228,7 +224,7 @@ function init3DTree() {
 
     const minX = d3.min(allX);
     // Correct maxX to account for spouse offset (110 is the gap used in renderAvatar)
-    const maxX = d3.max(siblings.map((n) => n.x + (n.data.spouse ? 110 : 0)));
+    const maxX = d3.max(siblings.map((n) => n.x + (n.data.spouse ? 120 : 0)));
     const depthY = allY[0];
 
     // Padding
@@ -309,13 +305,10 @@ Z`;
     const thisExtrusion = getExtrusion(siblings[0].depth);
     const sidePath = getSideSkirt(thisExtrusion);
 
-    // Color Logic - Corrected per user "Dark at top, Light on side"
-    // The Base Color is the VIBRANT color (Top).
-    // The Side Wall should be a LIGHTER tint of that base.
-
     const baseColor = getGenColor(siblings[0]);
-    const topColor = baseColor; // Top gets the rich color
-    const sideColor = d3.color(baseColor).darker(0.5); // Darker side for 3D depth
+
+    // Side Wall (Lighter shade as requested)
+    const sideColor = d3.color(baseColor).brighter(0.6);
 
 
     // Render Shadow (Initially Hidden)
@@ -362,22 +355,17 @@ Z`;
       .attr("stroke-linejoin", "round");
 
     // Top Face (Vibrant)
-    const borderColor = darken(baseColor, 0.5); // Darker border for the top face
+    const borderColor = d3.color(baseColor).darker(0.5).hex(); // Restored darker border
     grp
       .append("path")
       .attr("d", topPath)
-      .attr("fill", topColor)
-      .attr("fill-opacity", 1.0) // No transparency to prevent see-through lines
+      .attr("fill", baseColor)
+      .attr("fill-opacity", 1.0) // Solid blocks
       .attr("stroke", borderColor)
-      .attr("stroke-width", 2);
+      .attr("stroke-width", 1.5);
 
 
-    // High-End Shine Effect (Pseudo-Glass)
-    grp.append("path")
-      .attr("d", topPath)
-      .attr("fill", "url(#glass-gradient)")
-      .attr("fill-opacity", 0.35)
-      .attr("pointer-events", "none");
+    // Shine effect removed as per user request
 
 
     // Generation Label (On Top Surface)
@@ -411,7 +399,7 @@ Z`;
     // Block & Link Heights (Z)
     // Connect to the SIDE of the button (mid-height of tile)
     // Block Surface = extrusion. Tile = 10 thick. Mid = extrusion + 5.
-    const zOffset = 5;
+    const zOffset = 4;
     const sz = getExtrusion(s.depth) + zOffset;
     const tz = getExtrusion(t.depth) + zOffset;
 
@@ -435,7 +423,7 @@ Z`;
       // Offset start/end to be at the exact icon position (0 offset)
       const yOffset = customYOffset !== null ? customYOffset : 0;
       
-      const linkZOffset = 7.5; // Use half-height for vertical center
+      const linkZOffset = 4; // Half-height of 8px chipH
       const sz_adj = sz + linkZOffset;
       const tz_adj = tz + linkZOffset;
 
@@ -449,9 +437,9 @@ Z`;
     };
 
     if (s.data.spouse) {
-      const AVATAR_Gap = 180;
+      const AVATAR_Gap = 120; // Synchronized Spouse Gap
       const midSx = sx + AVATAR_Gap / 2;
-      const h_adj = sz + 7.5; // Shared height for bar and child link
+      const h_adj = sz + 4; // Shared height for bar and child link
       
       // Points for parent connector bar (vertical centers of icons)
       const pParent1 = project(sx, sy, h_adj);
@@ -520,7 +508,7 @@ Z`;
     const g = d3.select(this);
 
     const renderAvatar = (data, isSpouse) => {
-      const xOff = isSpouse ? 180 : 0; 
+      const xOff = isSpouse ? 120 : 0; // Synchronized Spouse Gap
       const dx = xOff * cos * scale;
       const dy = xOff * sin * params.tilt * scale;
 
@@ -533,7 +521,7 @@ Z`;
             .transition()
             .duration(200)
             .ease(d3.easeCubicOut)
-            .attr("transform", `translate(${dx}, ${dy - 20}) scale(1.1)`);
+            .attr("transform", `translate(${dx}, ${dy}) scale(1.3)`);
           d3.select(this.parentNode).raise();
           d3.select(this).raise();
         })
@@ -555,7 +543,7 @@ Z`;
 
       const avatarW = 55; 
       const avatarR = 6;
-      const chipH = 15; 
+      const chipH = 8; // Thinner 3D profile
 
       // 1. Precise 3D Projection Helper
       // (Uses the same math as matrixStr to ensure perfect seams)
@@ -638,16 +626,32 @@ Z`;
           .text(data.relation)
           .attr("y", 14)
           .attr("text-anchor", "start")
-
           .attr("fill", "#ccc")
           .attr("font-size", "10px")
           .style("font-family", "sans-serif")
           .style("text-transform", "uppercase")
           .attr("opacity", 0.9);
       }
-
-
     };
+
+    if (d.data.spouse) {
+      // Spouse Connection Line (Wedding Bar) - Drawn Behind Avatars
+      const gap = 120;
+      const h_adj = -4; // Centered on thinner 8px profile
+      
+      const p1 = [0, h_adj]; // Start at parent center
+      const p2 = [gap * cos * scale, gap * sin * params.tilt * scale + h_adj]; // End at spouse center
+      
+      g.append("line")
+        .attr("x1", p1[0])
+        .attr("y1", p1[1])
+        .attr("x2", p2[0])
+        .attr("y2", p2[1])
+        .attr("stroke", d3.color(getGenColor(d)).darker(1.5))
+        .attr("stroke-width", 4)
+        .attr("opacity", 0.8)
+        .attr("pointer-events", "none");
+    }
 
     renderAvatar(d.data, false);
     if (d.data.spouse) {

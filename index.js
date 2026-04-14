@@ -119,7 +119,8 @@ let currentTreeRoot = null;
 
 // State
 
-let currentView = "fan"; // 'fan', 'isometric' or 'pedigree'
+window.currentView = "fan"; // 'fan', 'isometric' or 'pedigree'
+let currentView = window.currentView;
 let ancestorMode = false;
 let fanHistory = []; // Stack for Fan View navigation history
 let currentFanRootId = null; // Track current root ID for Fan View
@@ -548,9 +549,9 @@ function initFan(startNodeId = null) {
           depth: d.depth + 1,
           x0: d.x0,
           x1: d.x1,
-          y0: rStart + 2,
-          y1: rStart + 22,
-          color: "#999999", // Updated to match new grey theme
+          y0: rStart - 4, // Extremely close to the block (2px gap)
+          y1: rStart + 16,
+          color: "#999999", 
           isPlusButton: true,
           parent: d,
         };
@@ -627,31 +628,15 @@ function initFan(startNodeId = null) {
     .endAngle((d) => d.x1)
     .innerRadius((d) => d.y0)
     .outerRadius((d) => d.y1)
-    .padAngle(0.005) // Drastically reduced to ensure segments touch and fill space
-    .cornerRadius((d) => {
-      const angle = d.x1 - d.x0;
-      if (angle < 0.1) return 0; // No corners for thin segments to prevent visual gaps
-      return 4;
-    });
-
-  // --- 3D Scene Setup (Stacked Layers) ---
+    .padAngle(0.005) 
+    .cornerRadius(8);   // --- 3D Scene Setup (Smooth Version) ---
   const scene = svg
     .append("g")
     .attr("transform", `translate(${width / 2}, ${height / 2})`);
 
-  // 1. Tilt Container: Scale Y to simulate perspective tilt
-  const TILT_SCALE = 1;
   const fanGroup = scene
     .append("g")
-    .attr("class", "fan-3d-container")
-    .attr("transform", `scale(1, ${TILT_SCALE})`);
-
-  // 2. Render Layers (Bottom to Top) for Thickness
-  const NUM_LAYERS = 8;
-  const LAYER_OFFSET = 2; // Pixels per layer (total depth = 16px)
-
-  // Helper: Darken color for sides
-  const darken = (c, factor) => d3.color(c).darker(factor).hex();
+    .attr("class", "fan-3d-container");
 
   // Filter Data: Exclude nodes that are hidden
   const visibleNodes = fanRoot.descendants().filter((d) => {
@@ -669,84 +654,103 @@ function initFan(startNodeId = null) {
   // Merge Regular Nodes + Plus Nodes
   const finalRenderNodes = visibleNodes.concat(plusNodes);
 
+  const TOTAL_DEPTH = 12; // Total pixels of visual thickness
+  const NUM_LAYERS = 24;  // Extreme density for perfectly smooth vertical walls
+  const Y_STEP = 0.5;     // 0.5px shift per layer
+
+  // 1. Solid Side Walls (Vertical Extrusion for all-around coverage)
+  const depthLayer = fanGroup.append("g").attr("class", "fan-depth-layers");
+
   for (let i = 0; i < NUM_LAYERS; i++) {
-    const isTop = i === NUM_LAYERS - 1;
-    const yOffset = (NUM_LAYERS - 1 - i) * LAYER_OFFSET;
-
-    const layer = fanGroup
-      .append("g")
-      .attr("transform", `translate(0, ${yOffset})`);
-
-    const paths = layer
-      .selectAll(".fan-segment")
+    const yOffset = (NUM_LAYERS - i) * Y_STEP;
+    
+    depthLayer
+      .selectAll(`.fan-segment-depth-${i}`)
       .data(finalRenderNodes)
       .enter()
+      .filter((d) => !d.isPlusButton) // EXCLUDE plus buttons from 3D depth
       .append("path")
-      .attr("class", "fan-segment")
-      .attr("d", (d) => {
-        // --- PLUS BUTTON GEOMETRY REDESIGN (Circular/Small Square) ---
-        if (d.isPlusButton) {
-          const midAngle = (d.x0 + d.x1) / 2;
-          const r = (d.y0 + d.y1) / 2;
-          const size = Math.min(15, (d.x1 - d.x0) * r * 0.8); // Responsive sizing
-          
-          // Render as a small rounded rectangle centered in the arc's bounding box
-          // This prevents overlapping black blocks.
-          return d3.arc()({
-            startAngle: midAngle - size/(2*r),
-            endAngle: midAngle + size/(2*r),
-            innerRadius: r - size/2,
-            outerRadius: r + size/2,
-            padAngle: 0,
-            cornerRadius: 4
-          });
-        }
-        return arc(d);
-      })
+      .attr("class", `fan-segment-depth-${i}`)
+      .attr("transform", `translate(0, ${yOffset})`)
+      .attr("d", arc) 
       .style("fill", (d) => {
-        if (d.isPlusButton) return "#777";
-        return isTop ? (d.color || "#ccc") : darken(d.color || "#ccc", 0.5 + (NUM_LAYERS - i) * 0.1);
+          return d3.color(d.color || "#ccc").darker(1.2).hex();
       })
-      .style("stroke", (d) => (isTop ? "#333" : "none"))
-      .style("stroke-width", "0.5px")
-      .style("opacity", (d) => {
-        // --- 3D RENDERING SAFETY (RELAXED) ---
-        // Allow 3D depth to show on narrower segments (lowered from 0.1 to 0.04)
-        if (!isTop && (d.x1 - d.x0) < 0.04) return 0;
-        return 1;
-      });
-
-    if (isTop) {
-      paths
-        .style("cursor", "pointer")
-        .on("click", (event, d) => {
-          event.stopPropagation();
-          console.log(
-            "Fan Segment Clicked:",
-            d.data.name,
-            "Depth:",
-            d.depth,
-            "ID:",
-            d.data.id,
-          );
-
-          if (d.isPlusButton) {
-            // Expand Tree - Parent ID is in d.data.id from constructor
-            console.log("Expanding tree at:", d.data.id);
-            if (currentFanRootId) fanHistory.push(currentFanRootId);
-            initFan(d.data.id);
-          } else {
-            showModal(d);
-          }
-        })
-        .on("mouseover", function () {
-          d3.select(this).style("filter", "brightness(1.1)");
-        })
-        .on("mouseout", function () {
-          d3.select(this).style("filter", null);
-        });
-    }
+      .style("stroke", function() { return d3.select(this).style("fill"); })
+      .style("stroke-width", "1.5px") 
+      .style("opacity", (d) => ((d.x1 - d.x0) < 0.04 ? 0 : 1));
   }
+
+  // 2. Top Faces
+  const topLayer = fanGroup.append("g").attr("class", "fan-top-layer");
+
+  const topPaths = topLayer
+    .selectAll(".fan-segment")
+    .data(finalRenderNodes)
+    .enter()
+    .append("path")
+    .attr("class", "fan-segment")
+    .attr("d", (d) => {
+      if (d.isPlusButton) {
+        const midAngle = (d.x0 + d.x1) / 2;
+        const r = (d.y0 + d.y1) / 2;
+        const size = 20; 
+        const angularWidth = size / r;
+        return d3.arc()({
+          startAngle: midAngle - angularWidth / 2,
+          endAngle: midAngle + angularWidth / 2,
+          innerRadius: r - size / 2,
+          outerRadius: r + size / 2,
+          padAngle: 0,
+          cornerRadius: 15
+        });
+      }
+      return arc(d);
+    })
+    .style("fill", (d) => {
+        if (d.isPlusButton) {
+          const isLightMode = typeof window.isDarkMode !== "undefined" && !window.isDarkMode;
+          return isLightMode ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.2)"; // Subtle background for plus icon
+        }
+        return d.color || "#ccc";
+    })
+    .style("stroke", "none") // No stroke for regular blocks OR plus background
+    .style("stroke-width", "0px")
+    .style("filter", (d) => d.isPlusButton ? null : null)
+    .style("cursor", "pointer")
+    .on("click", (event, d) => {
+      event.stopPropagation();
+      if (d.isPlusButton) {
+        if (currentFanRootId) fanHistory.push(currentFanRootId);
+        initFan(d.data.id);
+      } else {
+        showModal(d);
+      }
+    })
+    .on("mouseover", function (event, d) {
+      if (d.isPlusButton) {
+        const midAngle = (d.x0 + d.x1) / 2;
+        const r = (d.y0 + d.y1) / 2;
+        const cx = r * Math.sin(midAngle);
+        const cy = -r * Math.cos(midAngle);
+        
+        d3.select(this)
+          .transition().duration(200)
+          .style("filter", "drop-shadow(0px 4px 8px rgba(0,0,0,0.3))")
+          .attr("transform", `translate(${cx}, ${cy}) scale(1.1) translate(${-cx}, ${-cy})`);
+      } else {
+        d3.select(this)
+          .transition().duration(200)
+          .style("filter", "brightness(1.1)");
+      }
+    })
+    .on("mouseout", function (event, d) {
+      d3.select(this)
+        .transition().duration(200)
+        .style("filter", d.isPlusButton ? "drop-shadow(0px 2px 4px rgba(0,0,0,0.2))" : null)
+        .attr("transform", "translate(0,0) scale(1)");
+    });
+
 
   // 3. Labels (On Top Layer)
   const labelGroup = fanGroup
@@ -844,29 +848,39 @@ function initFan(startNodeId = null) {
       return;
     }
 
-    // Expand Button Text (Dynamic or Depth Limit)
+    // Expand Button Icon (SVG Path for a cleaner look)
     if (d.isPlusButton) {
-      // Re-center for the Plus symbol to ensure it's un-rotated IF we want upright.
       el.attr("transform", function () {
-        const centroid = arc.centroid(d);
-        return `translate(${centroid[0]}, ${centroid[1]})`;
+        const midAngle = (d.x0 + d.x1) / 2;
+        const r = (d.y0 + d.y1) / 2;
+        const cx = r * Math.sin(midAngle);
+        const cy = -r * Math.cos(midAngle);
+        return `translate(${cx}, ${cy})`;
       });
 
-      // --- PLUS BUTTON SCALING ---
-      // Scale down the symbol if the wedge is very narrow to avoid overlappers.
-      const plusFontSize = (d.x1 - d.x0 < 0.15) ? "10px" : "16px";
-
-      el.attr("text-anchor", "middle")
-        .attr("dominant-baseline", "central")
-        .style("pointer-events", "none");
-
-      el.append("text")
-        .text("+")
-        .attr("dy", "0em") // Baseline central handles this now
-        .style("font-size", plusFontSize)
-        .style("font-weight", "bold")
-        .style("fill", "white")
-        .style("pointer-events", "none");
+      // Draw a better '+' icon using two white lines
+      const crossSize = d.x1 - d.x0 < 0.15 ? 4 : 6;
+      
+      el.append("line")
+        .attr("x1", -crossSize).attr("y1", 0)
+        .attr("x2", crossSize).attr("y2", 0)
+        .attr("stroke", () => {
+            const isLightMode = typeof window.isDarkMode !== "undefined" && !window.isDarkMode;
+            return isLightMode ? "#555" : "white";
+        })
+        .attr("stroke-width", 2)
+        .attr("stroke-linecap", "round");
+        
+      el.append("line")
+        .attr("x1", 0).attr("y1", -crossSize)
+        .attr("x2", 0).attr("y2", crossSize)
+        .attr("stroke", () => {
+            const isLightMode = typeof window.isDarkMode !== "undefined" && !window.isDarkMode;
+            return isLightMode ? "#555" : "white";
+        })
+        .attr("stroke-width", 2)
+        .attr("stroke-linecap", "round");
+        
       return;
     }
 
@@ -952,12 +966,24 @@ function initFan(startNodeId = null) {
     });
 
   // Initial Transform: Dynamic "Fit to Viewport" Scale
-  // Calculate a scale that ensures the radius fits with a 10% safety margin.
-  // Radius is roughly min(width, height) * 0.4.
-  // So Diameter is min(width, height) * 0.8.
-  // A scale of 0.9 on top of that ensures 80% * 0.9 = 72% of screen is used,
-  // which guarantees no clipping across any aspect ratio.
-  const initialScale = 0.9;
+  // Calculate the actual maximum radius of the fan based on the rendered depth
+  const maxDepth = fanRoot.height;
+  const maxActualRadius = depthStartRadius[maxDepth] + (ringThickness[maxDepth] || 60);
+  
+  const screenMin = Math.min(width, height);
+  const isTablet = width >= 600 && width <= 1024;
+  
+  // Determine a safe margin - more generous on mobile/tablet
+  const margin = (isMobile || isTablet) ? 0.85 : 0.9;
+  
+  // Calculate scale: s * (2 * maxActualRadius) = screenMin * margin
+  let initialScale = (screenMin * margin) / (2 * maxActualRadius);
+
+  // Cap the scale so it doesn't get too large for small trees, 
+  // but allow it to be very small for deep trees to ensure full visibility.
+  if (initialScale > 1.2) initialScale = 1.2;
+  if (initialScale < 0.2) initialScale = 0.2; // Absolute minimum to avoid dot-sized tree
+
   const initialTransform = d3.zoomIdentity
     .translate(width / 2, height / 2)
     .scale(initialScale);
@@ -1278,6 +1304,7 @@ function initVerticalTree() {
 
 function switchView(view) {
   currentView = view;
+  window.currentView = view;
 
   // Close mobile drawer when user changes view, to keep screen clean.
   document.body.classList.remove("mobile-drawer-open");
@@ -1291,24 +1318,33 @@ function switchView(view) {
   }
 
   // 2. Default: Show D3 SVG (Fan, Tree, Vert, Iso all use D3 SVG)
-  // Globe View will hide it specifically.
+  // Globe/Real3D View will hide it specifically.
   const svgEl = document.querySelector("#tree-container svg");
-  if (svgEl) svgEl.style.display = "block";
+  if (svgEl) {
+    svgEl.style.display = view === "real3d" ? "none" : "block";
+  }
 
   // 3. UI Controls - Member Sidebar (Desktop & Mobile)
   const fanControls = document.querySelectorAll(".fan-controls-group");
   const isoControls = document.querySelectorAll(".iso-controls-group");
+  const real3dControls = document.querySelectorAll(".real3d-controls-group");
   const fanSidebarMobile = document.getElementById("fan-member-sidebar");
   const fanSidebarDesktop = document.getElementById(
     "fan-member-sidebar-desktop",
   );
 
-  if (view === "fan" || view === "isometric") {
+  if (view === "fan" || view === "isometric" || view === "real3d") {
     if (view === "fan") {
       fanControls.forEach((el) => (el.style.display = "flex"));
       isoControls.forEach((el) => (el.style.display = "none"));
+      real3dControls.forEach((el) => (el.style.display = "none"));
     } else if (view === "isometric") {
       isoControls.forEach((el) => (el.style.display = "flex"));
+      fanControls.forEach((el) => (el.style.display = "none"));
+      real3dControls.forEach((el) => (el.style.display = "none"));
+    } else if (view === "real3d") {
+      real3dControls.forEach((el) => (el.style.display = "flex"));
+      isoControls.forEach((el) => (el.style.display = "none"));
       fanControls.forEach((el) => (el.style.display = "none"));
     }
 
@@ -1319,6 +1355,7 @@ function switchView(view) {
     // Hide Fan UI by default for other views
     fanControls.forEach((el) => (el.style.display = "none"));
     isoControls.forEach((el) => (el.style.display = "none"));
+    real3dControls.forEach((el) => (el.style.display = "none"));
     if (fanSidebarMobile) fanSidebarMobile.style.display = "none";
     if (fanSidebarDesktop) fanSidebarDesktop.style.display = "none";
   }
@@ -1344,6 +1381,9 @@ function switchView(view) {
       familyData = transformFamilyData(rawFamilyData, currentFanRootId, true);
     }
     initPedigreeView();
+  } else if (view === "real3d") {
+    // Pass current focus if set
+    initReal3DView(typeof currentFanRootId !== "undefined" ? currentFanRootId : null);
   }
 }
 

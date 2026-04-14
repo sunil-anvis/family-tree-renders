@@ -1371,3 +1371,9 @@ body {
         font-size: 24px;
     }
 }
+
+.nav-btn-inner-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}

@@ -348,5 +348,35 @@ function initPedigreeView() {
     .zoom()
     .scaleExtent([0.15, 3])
     .on("zoom", (e) => g.attr("transform", e.transform));
-  svg.call(zoom).call(zoom.transform, d3.zoomIdentity);
+
+  // Default initial transform
+  let initialTransform = d3.zoomIdentity;
+
+  const isMobile = window.innerWidth < 600;
+  if (isMobile) {
+    // On mobile, we want to see ~2.5 generations (Me, Parents, and part of Grandparents)
+    // Horizontal span of 3 generations is roughly (CARD_W * 3) + (COL_GAP * 2) = 170*3 + 50*2 = 510 + 100 = 610px.
+    // Screen width is usually ~360-400px.
+    const targetWidth = (CARD_W * 2.8) + (COL_GAP * 2); 
+    const scale = Math.min(1, (window.innerWidth * 0.9) / targetWidth);
+    
+    // Shift slightly left to show the root "Me" clearly
+    initialTransform = d3.zoomIdentity
+      .translate(20, height / 2 - (totalHeight / 2) * scale)
+      .scale(scale);
+      
+    // Re-adjust: our coord system x=0 is left. Root starts at 100 + CARD_W/2 = 185.
+    // With scale 0.6, 185 becomes 111. 
+    // We want the root to be at say 20px from left.
+    // Correct centering math: 
+    // To keep the point (rootX, height/2) at (20 + offset, height/2)
+    const tx = 20 - (100) * scale;
+    const ty = (height / 2) * (1 - scale);
+    
+    initialTransform = d3.zoomIdentity
+      .translate(tx, ty)
+      .scale(scale);
+  }
+
+  svg.call(zoom).call(zoom.transform, initialTransform);
 }

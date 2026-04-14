@@ -271,7 +271,7 @@ function initFan(startNodeId = null) {
 
   // 1. Assign "Value" to leaves to determine angular width
   // Use total subtree size (node count) as weight for a more accurate "busy-ness" metric
-  fanRoot.sum(d => 1);
+  fanRoot.sum((d) => 1);
 
   // Override Layout
   // Assign x0, x1 (Angle) and y0, y1 (Radius)
@@ -361,9 +361,9 @@ function initFan(startNodeId = null) {
       // Initialize Root's children angular range with weighted distribution
       if (d.children) {
         const range = d.x1 - d.x0;
-        const totalValue = d3.sum(d.children, c => c.value);
-        
-        const SAFE_MIN_ANGLE = 0.08; 
+        const totalValue = d3.sum(d.children, (c) => c.value);
+
+        const SAFE_MIN_ANGLE = 0.08;
         const childAngles = new Array(d.children.length);
         const fixedIndices = new Set();
         let remainingRange = range;
@@ -375,7 +375,8 @@ function initFan(startNodeId = null) {
           changed = false;
           d.children.forEach((child, i) => {
             if (fixedIndices.has(i)) return;
-            const proportionalAngle = (child.value / remainingValue) * remainingRange;
+            const proportionalAngle =
+              (child.value / remainingValue) * remainingRange;
             if (proportionalAngle < SAFE_MIN_ANGLE) {
               childAngles[i] = SAFE_MIN_ANGLE;
               remainingRange -= SAFE_MIN_ANGLE;
@@ -412,7 +413,7 @@ function initFan(startNodeId = null) {
           // Init Y for filter check
           const rStart = depthStartRadius[child.depth] || child.depth * 50;
           const rThick = ringThickness[child.depth] || 50;
-          child.y0 = rStart + 15; 
+          child.y0 = rStart + 15;
           child.y1 = rStart + rThick - 15;
         });
 
@@ -436,13 +437,16 @@ function initFan(startNodeId = null) {
       }
 
       const range = d.x1 - d.x0;
-      const totalValue = d3.sum(d.children, c => c.value);
-      
+      const totalValue = d3.sum(d.children, (c) => c.value);
+
       const SAFE_MIN_ANGLE = 0.08;
       const totalNeededMin = d.children.length * SAFE_MIN_ANGLE;
 
       // --- THE ROBUST THRESHOLD CHECK ---
-      if (range < totalNeededMin || (range / d.children.length) < MIN_ANGLE_THRESHOLD) {
+      if (
+        range < totalNeededMin ||
+        range / d.children.length < MIN_ANGLE_THRESHOLD
+      ) {
         d.hasHiddenChildren = true;
         d.children.forEach((c) => (c.isSystemHidden = true));
 
@@ -473,7 +477,8 @@ function initFan(startNodeId = null) {
           changed = false;
           d.children.forEach((child, i) => {
             if (fixedIndices.has(i)) return;
-            const proportionalAngle = (child.value / remainingValue) * remainingRange;
+            const proportionalAngle =
+              (child.value / remainingValue) * remainingRange;
             if (proportionalAngle < SAFE_MIN_ANGLE) {
               childAngles[i] = SAFE_MIN_ANGLE;
               remainingRange -= SAFE_MIN_ANGLE;
@@ -508,7 +513,7 @@ function initFan(startNodeId = null) {
           const rStart = depthStartRadius[child.depth];
           const rThick = ringThickness[child.depth];
 
-          child.y0 = rStart + 15; 
+          child.y0 = rStart + 15;
           child.y1 = rStart + rThick - 15;
         });
 
@@ -527,11 +532,8 @@ function initFan(startNodeId = null) {
     .innerRadius((d) => d.y0)
     .outerRadius((d) => d.y1)
     .padAngle(0.02) // Increased for a clean, spaced-out 3D look
-    .cornerRadius((d) => {
-      const angle = d.x1 - d.x0;
-      if (angle < 0.1) return 0; 
-      return 6; // Increased for smoother premium look
-    });
+    .cornerRadius(8); // Increased for smoother premium look
+
 
   // --- 3D Scene Setup (Stacked Layers) ---
   const scene = svg
@@ -540,17 +542,12 @@ function initFan(startNodeId = null) {
 
   // 1. Tilt Container: Scale Y to simulate perspective tilt
   const TILT_SCALE = 1;
+  // --- 3D Scene Setup (Smooth Version) ---
   const fanGroup = scene
     .append("g")
     .attr("class", "fan-3d-container")
     .attr("transform", `scale(1, ${TILT_SCALE})`);
 
-  // 2. Render Layers (Bottom to Top) for Thickness
-  const NUM_LAYERS = 8;
-  const LAYER_OFFSET = 2; // Pixels per layer (total depth = 16px)
-
-  // Helper: Darken color for sides
-  const darken = (c, factor) => d3.color(c).darker(factor).hex();
 
   // Filter Data: Exclude nodes that are hidden
   const visibleNodes = fanRoot.descendants().filter((d) => {
@@ -568,93 +565,129 @@ function initFan(startNodeId = null) {
   // Merge Regular Nodes + Plus Nodes
   const finalRenderNodes = visibleNodes.concat(plusNodes);
 
-  for (let i = 0; i < NUM_LAYERS; i++) {
-    const isTop = i === NUM_LAYERS - 1;
-    const radialOffset = (NUM_LAYERS - 1 - i) * 1.2; // 1.2px inward shift per layer
+  const TOTAL_DEPTH = 10; // Pixels of visual thickness
 
-    const layer = fanGroup
-      .append("g"); // Removed translate(0, yOffset)
+  // 1. Side/Depth Walls (Rendered FIRST to stay behind)
+  const depthLayer = fanGroup.append("g").attr("class", "fan-depth-layer");
 
-    const paths = layer
-      .selectAll(".fan-segment")
-      .data(finalRenderNodes)
-      .enter()
-      .append("path")
-      .attr("class", "fan-segment")
-      .attr("d", (d) => {
-        // --- 3D DEPTH MODIFICATION (STRICTLY INNER-SIDE ONLY) ---
-        // We only offset the innerRadius. Keeping outerRadius constant ensures
-        // zero visibility of depth on the outer edge.
-        const modifiedArc = d3.arc()
-          .startAngle(d.x0)
-          .endAngle(d.x1)
-          .innerRadius(Math.max(0, d.y0 - radialOffset))
-          .outerRadius(d.y1) // Constant outer edge
-          .padAngle(0.02)
-          .cornerRadius(6);
+  depthLayer
+    .selectAll(".fan-segment-depth")
+    .data(finalRenderNodes)
+    .enter()
+    .append("path")
+    .attr("class", "fan-segment-depth")
+    .attr("d", (d) => {
+      // Create a "wall" by drawing an arc that covers the depth from y0-TOTAL_DEPTH to y0
+      const depthArc = d3.arc()
+        .startAngle(d.x0)
+        .endAngle(d.x1)
+        .innerRadius(Math.max(0, d.y0 - TOTAL_DEPTH))
+        .outerRadius(d.y0 + 2) // Slight overlap to prevent gaps
+        .padAngle(0.02)
+        .cornerRadius(8);
 
-        // --- PLUS BUTTON GEOMETRY REDESIGN ---
+      if (d.isPlusButton) {
+        const midAngle = (d.x0 + d.x1) / 2;
+        const r = (d.y0 + d.y1) / 2;
+        const size = Math.min(15, (d.x1 - d.x0) * r * 0.8);
+        return d3.arc()({
+          startAngle: midAngle - size / (2 * r),
+          endAngle: midAngle + size / (2 * r),
+          innerRadius: r - size / 2 - TOTAL_DEPTH/2, // Shifted inward for button depth
+          outerRadius: r + size / 2,
+          padAngle: 0,
+          cornerRadius: 4
+        });
+      }
+      return depthArc(d);
+    })
+    .style("fill", (d) => {
+        if (d.isPlusButton) {
+          const isLightMode = typeof window.isDarkMode !== "undefined" && !window.isDarkMode;
+          const baseColor = isLightMode ? "#bbb" : "#00D1FF"; // Slightly darker depth in light mode
+          return d3.color(baseColor).darker(0.8).hex();
+        }
+        const baseColor = d.color || "#ccc";
+        return d3.color(baseColor).darker(1.5).hex();
+    })
+    .style("opacity", (d) => {
+        if (d.x1 - d.x0 < 0.04) return 0;
+        return 1;
+    });
+
+  // 2. Top Faces
+  const topLayer = fanGroup.append("g").attr("class", "fan-top-layer");
+
+  const topPaths = topLayer
+    .selectAll(".fan-segment")
+    .data(finalRenderNodes)
+    .enter()
+    .append("path")
+    .attr("class", "fan-segment")
+    .attr("d", (d) => {
         if (d.isPlusButton) {
           const midAngle = (d.x0 + d.x1) / 2;
-          const rBase = (d.y0 + d.y1) / 2;
-          const r = rBase - radialOffset / 2; // Slight shift for button depth
-          const size = Math.min(15, (d.x1 - d.x0) * rBase * 0.8);
-          
+          const r = (d.y0 + d.y1) / 2;
+          const size = Math.min(22, (d.x1 - d.x0) * r * 0.85);
+
           return d3.arc()({
-            startAngle: midAngle - size/(2*rBase),
-            endAngle: midAngle + size/(2*rBase),
-            innerRadius: rBase - size/2 - radialOffset,
-            outerRadius: rBase + size/2, // Keep outer edge constant
+            startAngle: midAngle - size / (2 * r),
+            endAngle: midAngle + size / (2 * r),
+            innerRadius: r - size / 2,
+            outerRadius: r + size / 2,
             padAngle: 0,
-            cornerRadius: 4
+            cornerRadius: 12,
           });
         }
-        return modifiedArc(d);
-      })
-      .style("fill", (d) => {
-        if (d.isPlusButton) return "#777";
-        return isTop ? d.color : darken(d.color, 0.5 + (NUM_LAYERS - i) * 0.1);
-      })
-      .style("stroke", (d) => (isTop ? "#333" : "none"))
-      .style("stroke-width", "0.5px")
-      .style("opacity", (d) => {
-        // --- 3D RENDERING SAFETY (RELAXED) ---
-        // Allow 3D depth to show on narrower segments (lowered from 0.1 to 0.04)
-        if (!isTop && (d.x1 - d.x0) < 0.04) return 0;
-        return 1;
-      });
-
-    if (isTop) {
-      paths
-        .style("cursor", "pointer")
-        .on("click", (event, d) => {
-          event.stopPropagation();
-          console.log(
-            "Fan Segment Clicked:",
-            d.data.name,
-            "Depth:",
-            d.depth,
-            "ID:",
-            d.data.id,
-          );
-
-          if (d.isPlusButton) {
-            // Expand Tree - Parent ID is in d.data.id from constructor
-            console.log("Expanding tree at:", d.data.id);
-            if (currentFanRootId) fanHistory.push(currentFanRootId);
-            initFan(d.data.id);
-          } else {
-            showModal(d);
-          }
-        })
-        .on("mouseover", function () {
-          d3.select(this).style("filter", "brightness(1.1)");
-        })
-        .on("mouseout", function () {
-          d3.select(this).style("filter", null);
-        });
-    }
-  }
+        return arc(d);
+    })
+    .style("fill", (d) => {
+      if (d.isPlusButton) {
+        const isLightMode = typeof window.isDarkMode !== "undefined" && !window.isDarkMode;
+        return isLightMode ? "#eee" : "#00D1FF"; // Light button face in light mode
+      }
+      return d.color || "#ccc";
+    })
+    .style("stroke", (d) => {
+      if (d.isPlusButton) {
+        const isLightMode = typeof window.isDarkMode !== "undefined" && !window.isDarkMode;
+        return isLightMode ? "#bbb" : "#fff"; // Visible border in light mode
+      }
+      return "#333";
+    })
+    .style("stroke-width", (d) => d.isPlusButton ? "1.5px" : "0.5px")
+    .style("filter", (d) => d.isPlusButton ? "drop-shadow(0px 2px 4px rgba(0,0,0,0.4))" : null)
+    .style("cursor", "pointer")
+    .on("click", (event, d) => {
+      event.stopPropagation();
+      if (d.isPlusButton) {
+        if (currentFanRootId) fanHistory.push(currentFanRootId);
+        initFan(d.data.id);
+      } else {
+        showModal(d);
+      }
+    })
+    .on("mouseover", function (event, d) {
+      if (d.isPlusButton) {
+        const midAngle = (d.x0 + d.x1) / 2;
+        const r = (d.y0 + d.y1) / 2;
+        const cx = r * Math.sin(midAngle);
+        const cy = -r * Math.cos(midAngle);
+        
+        d3.select(this)
+          .transition().duration(200)
+          .style("filter", "drop-shadow(0px 4px 8px rgba(0,0,0,0.6))")
+          .attr("transform", `translate(${cx}, ${cy}) scale(1.2) translate(${-cx}, ${-cy})`);
+      } else {
+        d3.select(this).style("filter", "brightness(1.1)");
+      }
+    })
+    .on("mouseout", function (event, d) {
+      d3.select(this)
+        .transition().duration(200)
+        .style("filter", d.isPlusButton ? "drop-shadow(0px 2px 4px rgba(0,0,0,0.4))" : null)
+        .attr("transform", "translate(0,0) scale(1)");
+    });
 
   // 3. Labels (On Top Layer)
   const labelGroup = fanGroup
@@ -715,12 +748,12 @@ function initFan(startNodeId = null) {
       const angle = d.x1 - d.x0;
       const midRadius = (d.y0 + d.y1) / 2;
       const arcLengthPixels = angle * midRadius;
-      
+
       // Physical visibility check
       if (arcLengthPixels < 12 && d.depth > 1) return;
 
       let rotate = 0;
-      const isSlanted = angle < 0.2; 
+      const isSlanted = angle < 0.2;
       const baseRotate = deg - 90;
 
       if (isSlanted) {
@@ -766,7 +799,7 @@ function initFan(startNodeId = null) {
       });
 
       // --- PLUS BUTTON SCALING ---
-      const plusFontSize = (d.x1 - d.x0 < 0.15) ? "10px" : "16px";
+      const plusFontSize = d.x1 - d.x0 < 0.15 ? "10px" : "16px";
 
       el.attr("text-anchor", "middle")
         .attr("dominant-baseline", "central")
@@ -777,7 +810,10 @@ function initFan(startNodeId = null) {
         .attr("dy", "0em")
         .style("font-size", plusFontSize)
         .style("font-weight", "bold")
-        .style("fill", "white")
+        .style("fill", (d) => {
+            const isLightMode = typeof window.isDarkMode !== "undefined" && !window.isDarkMode;
+            return isLightMode ? "#555" : "white"; // Dark grey icon in light mode, white in dark
+        })
         .style("pointer-events", "none");
       return;
     }

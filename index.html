@@ -33,6 +33,7 @@
                     <button class="view-btn active" data-view="fan" title="Fan View"><i class="fa-solid fa-chart-pie"></i><span class="btn-label">Fan</span></button>
                     <button class="view-btn" data-view="isometric" title="3D View"><i class="fa-solid fa-cube"></i><span class="btn-label">3D</span></button>
                     <button class="view-btn" data-view="pedigree" title="Pedigree View"><i class="fa-solid fa-users-rectangle"></i><span class="btn-label">Pedigree</span></button>
+                    <button class="view-btn" data-view="real3d" title="Real 3D View"><i class="fa-solid fa-earth-americas"></i><span class="btn-label">Real 3D</span></button>
                 </div>
             </div>
 
@@ -66,6 +67,15 @@
                 <button class="btn-icon" onclick="setIsoAngle('front')" title="Front"><i class="fa-solid fa-border-all"></i></button>
             </div>
 
+            <div id="real3d-controls-mobile" class="sub-controls real3d-controls-group" style="display: none;">
+                <button class="btn-icon" onclick="moveReal3D('left')" title="Move Left"><i class="fa-solid fa-arrow-left"></i></button>
+                <button class="btn-icon" onclick="moveReal3D('up')" title="Move Up"><i class="fa-solid fa-arrow-up"></i></button>
+                <button class="btn-icon" onclick="moveReal3D('down')" title="Move Down"><i class="fa-solid fa-arrow-down"></i></button>
+                <button class="btn-icon" onclick="moveReal3D('right')" title="Move Right"><i class="fa-solid fa-arrow-right"></i></button>
+                <button class="btn-icon" onclick="moveReal3D('zoomIn')" title="Zoom In"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                <button class="btn-icon" onclick="moveReal3D('zoomOut')" title="Zoom Out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+            </div>
+
             <!-- Section 3: Export & Tools -->
             <div class="control-group">
                 <span class="group-label">Tools</span>
@@ -97,11 +107,12 @@
         <!-- Section 1: Views -->
         <div class="control-group">
             <span class="group-label">Views</span>
-            <div class="btn-pill-group">
-                <button class="view-btn active" data-view="fan" title="Fan View"><i class="fa-solid fa-chart-pie"></i></button>
-                <button class="view-btn" data-view="isometric" title="3D View"><i class="fa-solid fa-cube"></i></button>
-                <button class="view-btn" data-view="pedigree" title="Pedigree View"><i class="fa-solid fa-users-rectangle"></i></button>
-            </div>
+                <div class="btn-pill-group">
+                    <button class="view-btn active" data-view="fan" title="Fan View"><i class="fa-solid fa-chart-pie"></i></button>
+                    <button class="view-btn" data-view="isometric" title="3D View"><i class="fa-solid fa-cube"></i></button>
+                    <button class="view-btn" data-view="pedigree" title="Pedigree View"><i class="fa-solid fa-users-rectangle"></i></button>
+                    <button class="view-btn" data-view="real3d" title="Real 3D View"><i class="fa-solid fa-earth-americas"></i></button>
+                </div>
         </div>
 
         <!-- Section 2: Focus -->
@@ -132,6 +143,23 @@
             <button class="btn-icon" onclick="setIsoAngle('iso')" title="Default"><i class="fa-solid fa-cube"></i></button>
             <button class="btn-icon" onclick="setIsoAngle('top')" title="Top"><i class="fa-solid fa-layer-group"></i></button>
             <button class="btn-icon" onclick="setIsoAngle('front')" title="Front"><i class="fa-solid fa-border-all"></i></button>
+        </div>
+
+        <div id="real3d-controls-desktop" class="sub-controls real3d-controls-group" style="display: none;">
+            <div class="nav-btn-inner-group">
+                <button class="btn-icon" onclick="moveReal3D('left')" title="Move Left"><i class="fa-solid fa-arrow-left"></i></button>
+                <button class="btn-icon" onclick="moveReal3D('up')" title="Move Up"><i class="fa-solid fa-arrow-up"></i></button>
+                <button class="btn-icon" onclick="moveReal3D('down')" title="Move Down"><i class="fa-solid fa-arrow-down"></i></button>
+                <button class="btn-icon" onclick="moveReal3D('right')" title="Move Right"><i class="fa-solid fa-arrow-right"></i></button>
+            </div>
+            <div class="nav-btn-inner-group" style="margin-left: 10px; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 10px;">
+                <button class="btn-icon" onclick="moveReal3D('zoomIn')" title="Zoom In"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                <button class="btn-icon" onclick="moveReal3D('zoomOut')" title="Zoom Out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+            </div>
+            <div class="nav-btn-inner-group" style="margin-left: 10px; border-left: 1px solid rgba(255,255,255,0.1); padding-left: 10px;">
+                <button class="btn-icon real3d-back-btn" onclick="backReal3D()" title="Go Back History" disabled><i class="fa-solid fa-rotate-left"></i></button>
+                <button class="btn-icon" onclick="resetReal3D()" title="Reset to Home"><i class="fa-solid fa-house"></i></button>
+            </div>
         </div>
 
         <!-- Section 3: Export & Tools -->
@@ -221,9 +249,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 
+
+    <!-- Three.js for Real 3D View -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
     <script src="transform-api-data.js"></script>
 
     <script src="3d-view.js"></script>
+    <script src="real-3d-view.js"></script>
     <script src="pedigree-view.js"></script> <!-- Pedigree View -->
     <script src="data.js"></script>
     <script src="index.js"></script>
