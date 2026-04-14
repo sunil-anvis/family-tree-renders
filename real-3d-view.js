@@ -95,55 +95,121 @@ function initReal3DView(focusId) {
         const z = d.y * 1.5 - 500;
         const y = -d.depth * 250 + 400;
 
-        // Group (holds sphere + photo + labels)
-        const grp = new THREE.Group();
-        grp.position.set(x, y, z);
-        scene.add(grp);
+        // Main node group
+        const nodeGrp = new THREE.Group();
+        nodeGrp.position.set(x, y, z);
+        scene.add(nodeGrp);
 
-        // Sphere
-        const isMeNode = !!d.data.isMe;
-        const sphereMat = new THREE.MeshPhongMaterial({
-            color:   isMeNode ? 0xffd700 : 0x00f2ea,
-            emissive: isMeNode ? 0x221100 : 0x003333,
-            shininess: 90
-        });
-        const sphere = new THREE.Mesh(new THREE.SphereGeometry(35, 32, 32), sphereMat);
-        sphere.userData = d.data;   // <-- full member data for click
-        grp.add(sphere);
-        nodes3D.push(sphere);
+        const texLoader  = new THREE.TextureLoader();
+        const defaultPic = 'https://ui-avatars.com/api/?background=00f2ea&color=fff&name=?';
 
-        // Photo disc
-        const photoUrl = d.data.photo || defaultPic;
-        texLoader.load(photoUrl, tex => {
-            const plane = new THREE.Mesh(
-                new THREE.CircleGeometry(30, 32),
-                new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
+        // Helper to render a person node
+        const renderPerson = (person, offsetX) => {
+            const pGrp = new THREE.Group();
+            pGrp.position.x = offsetX;
+            nodeGrp.add(pGrp);
+
+            // Highlighting: Use gold for 'Me' OR the person we are currently focusing on
+            const isFocalPerson = !!person.isMe || (real3dCurrentFocusId && String(person.id) === String(real3dCurrentFocusId));
+            
+            const genderColor = person.gender === 'f' ? 0xff69b4 : 0x00f2ea;
+            const sphereMat = new THREE.MeshPhongMaterial({
+                color:   isFocalPerson ? 0xffd700 : genderColor,
+                emissive: isFocalPerson ? 0x221100 : 0x002222,
+                shininess: 90
+            });
+            const sphere = new THREE.Mesh(new THREE.SphereGeometry(35, 32, 32), sphereMat);
+            sphere.userData = person;
+            pGrp.add(sphere);
+            nodes3D.push(sphere);
+
+            // Photo
+            const photoUrl = person.photo || defaultPic;
+            texLoader.load(photoUrl, tex => {
+                const plane = new THREE.Mesh(
+                    new THREE.CircleGeometry(30, 32),
+                    new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
+                );
+                plane.position.z = 36;
+                pGrp.add(plane);
+            });
+
+            // Name
+            pGrp.add(createTextSprite(person.name || '?', 28, isFocalPerson ? '#ffd700' : '#ffffff', 0, 60));
+
+            // Relation
+            if (person.relation) {
+                pGrp.add(createTextSprite(person.relation, 20, '#aaaaaa', 0, -60));
+            }
+        };
+
+        if (d.data.spouse) {
+            renderPerson(d.data, -70);
+            renderPerson(d.data.spouse, 70);
+            // Spouse connection line (Marriage line)
+            const curve = new THREE.LineCurve3(new THREE.Vector3(-70, 0, 0), new THREE.Vector3(70, 0, 0));
+            const tube = new THREE.Mesh(
+                new THREE.TubeGeometry(curve, 1, 3, 8, false),
+                new THREE.MeshPhongMaterial({ color: 0x444444, transparent: true, opacity: 0.5 })
             );
-            plane.position.z = 36;
-            grp.add(plane);
-        });
+            nodeGrp.add(tube);
 
-        // Name label
-        grp.add(createTextSprite(d.data.name || '?', 28, isMeNode ? '#ffd700' : '#ffffff', 0, 60));
-
-        // Relation label
-        if (d.data.relation) {
-            grp.add(createTextSprite(d.data.relation, 20, '#aaaaaa', 0, -60));
+            // Vertical stem downwards to the point where children's branch starts
+            // Only show if there are actual children to connect to
+            if (d.children && d.children.length > 0) {
+                const stemCurve = new THREE.LineCurve3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -50, 0));
+                const stem = new THREE.Mesh(
+                    new THREE.TubeGeometry(stemCurve, 1, 2, 8, false),
+                    new THREE.MeshPhongMaterial({ color: 0x00f2ea, transparent: true, opacity: 0.4 })
+                );
+                nodeGrp.add(stem);
+            }
+        } else {
+            renderPerson(d.data, 0);
+            
+            // Also add stem for single parents if they have children
+            if (d.children && d.children.length > 0) {
+                const stemCurve = new THREE.LineCurve3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -50, 0));
+                const stem = new THREE.Mesh(
+                    new THREE.TubeGeometry(stemCurve, 1, 2, 8, false),
+                    new THREE.MeshPhongMaterial({ color: 0x00f2ea, transparent: true, opacity: 0.4 })
+                );
+                nodeGrp.add(stem);
+            }
         }
 
-        // Connection tube to parent
+        // Parent connection
         if (d.parent) {
             const px = d.parent.x;
             const pz = d.parent.y * 1.5 - 500;
             const py = -d.parent.depth * 250 + 400;
-            draw3DConnection(new THREE.Vector3(x, y, z), new THREE.Vector3(px, py, pz));
+
+            // Target: The child's person node (not the midpoint of child+spouse)
+            const childAtX = d.data.spouse ? x - 70 : x;
+            const childPos = new THREE.Vector3(childAtX, y, z);
+
+            // Source: Midpoint between parents, offset slightly down by the stem height if a stem exists
+            const parentHasChildren = d.parent.children && d.parent.children.length > 0;
+            const parentAtY = parentHasChildren ? py - 50 : py;
+            const parentPos = new THREE.Vector3(px, parentAtY, pz);
+
+            draw3DConnection(childPos, parentPos);
         }
     });
 
-    // ── Initial camera: focus on "Me" ─────────────────────────────────────────
-    const meNode = root.descendants().find(d => d.data.isMe) || root;
-    const mx = meNode.x, mz = meNode.y * 1.5 - 500, my = -meNode.depth * 250 + 400;
-    camera.position.set(mx, my + 300, mz + 900);
+    // ── Initial camera: focus on Focal Person ────────────────────────────────
+    // Prioritize the requested focusId, then "Me", then the tree root
+    const focalNode = root.descendants().find(d => 
+        (real3dCurrentFocusId && String(d.data.id) === String(real3dCurrentFocusId)) || 
+        (!real3dCurrentFocusId && d.data.isMe)
+    ) || root;
+
+    const mx = focalNode.x;
+    const mz = focalNode.y * 1.5 - 500;
+    const my = -focalNode.depth * 250 + 400;
+
+    // Position camera to look at the focal point from a nice angle
+    camera.position.set(mx, my + 300, mz + 1000);
     controls.target.set(mx, my, mz);
     controls.update();
 

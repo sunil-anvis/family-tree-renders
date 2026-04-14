@@ -388,13 +388,14 @@ function transformToIndividualFamilyTree(apiResponse, focusId = null) {
         parentRoot.children.forEach(sibling => {
             const siblingClone = clone(sibling);
             
-            // If this is "Me", add my children
-            if (sibling.id === focusPerson.id) {
-                if (sibling.spouse) siblingClone.spouse = clone(sibling.spouse);
-                if (sibling.children) {
-                    sibling.children.forEach(child => siblingClone.children.push(clone(child)));
-                    // Note: In this view, we ONLY show children of "Me", not children of siblings.
-                }
+            // Add spouse and children for BOTH "Me" AND siblings
+            if (sibling.spouse) siblingClone.spouse = clone(sibling.spouse);
+            if (sibling.children && sibling.children.length > 0) {
+                sibling.children.forEach(child => {
+                    const childClone = clone(child);
+                    // Optionally add child's spouse if needed, but the request was specifically for children
+                    siblingClone.children.push(childClone);
+                });
             }
             
             newRoot.children.push(siblingClone);
